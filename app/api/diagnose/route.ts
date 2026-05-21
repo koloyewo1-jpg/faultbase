@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import fs from 'fs'
-import path from 'path'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-function readKnowledgeBase() {
-  const filePath = path.join(process.cwd(), 'data', 'knowledge-base.json')
-  return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-}
+// Import JSON directly — works reliably in Vercel serverless
+import knowledgeBase from '../../../data/knowledge-base.json'
 
 function searchFaults(machineId: string, input: string) {
-  const kb = readKnowledgeBase()
+  const kb = knowledgeBase as any
 
   return kb.faults.filter((fault: any) => {
-    // Only approved faults — hard rule
     if (fault.status !== 'approved') return false
     if (fault.machine_id !== machineId) return false
 
@@ -48,10 +43,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Search approved faults only
     const matched = searchFaults(machine_id, input)
 
-    // No match — do NOT call AI
     if (matched.length === 0) {
       return NextResponse.json({
         matched: false,
@@ -59,7 +52,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Build context from matched faults only
     const faultContext = matched.map((f: any) => `
 FAULT RECORD
 Code: ${f.fault_code}
@@ -73,7 +65,6 @@ Fix time: ${f.estimated_fix_mins} minutes
 Escalation: ${f.escalation_guidance}
 `).join('\n---\n')
 
-    // Call AI with strict instructions
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1000,
@@ -86,7 +77,7 @@ STRICT RULES:
 Return this exact JSON structure:
 {
   "fault_code": "string",
-  "title": "string", 
+  "title": "string",
   "meaning": "string",
   "safety_precautions": ["string"],
   "top_causes": [{"rank": number, "cause": "string", "likelihood": "string"}],
@@ -107,15 +98,15 @@ Using ONLY the above records, provide a structured diagnosis.`
     })
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  const clean = text.replace(/```json|```/g, '').trim()
-const diagnosis = JSON.parse(clean)
+    const clean = text.replace(/```json|```/g, '').trim()
+    const diagnosis = JSON.parse(clean)
 
     return NextResponse.json({ matched: true, diagnosis })
 
-  } catch (error) {
-    console.error('Diagnosis error:', error)
+  } catch (error: any) {
+    console.error('Diagnosis error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Diagnosis service unavailable' },
+      { error: 'Diagnosis service unavailable', detail: error?.message },
       { status: 500 }
     )
   }
