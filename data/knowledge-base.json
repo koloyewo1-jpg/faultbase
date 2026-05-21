@@ -1,0 +1,479 @@
+{
+  "metadata": {
+    "machine": "Siemens SIMATIC S7-1200 Programmable Logic Controller",
+    "manual_ref": "S7-1200 System Manual, 03/2014, A5E02486680-AG",
+    "source": "ManualsLib — public domain Siemens documentation",
+    "extracted_by": "FaultBase KB Builder",
+    "extraction_date": "2026-05-09",
+    "version": "1.0",
+    "notes": "All faults set to DRAFT. Engineer review and approval required before use in diagnosis."
+  },
+  "machines": [
+    {
+      "id": "s7-1200-cpu",
+      "name": "Siemens S7-1200 CPU",
+      "asset_tag": "S7-1200-CPU",
+      "area": "Production / Control Panel",
+      "machine_type": "Programmable Logic Controller",
+      "manufacturer": "Siemens AG",
+      "model_number": "SIMATIC S7-1200"
+    },
+    {
+      "id": "s7-1200-sm",
+      "name": "Siemens S7-1200 Signal Module (SM)",
+      "asset_tag": "S7-1200-SM",
+      "area": "Production / Control Panel",
+      "machine_type": "PLC Signal Module",
+      "manufacturer": "Siemens AG",
+      "model_number": "SIMATIC S7-1200 SM"
+    },
+    {
+      "id": "s7-1200-iolink",
+      "name": "Siemens S7-1200 SM 1278 IO-Link Master",
+      "asset_tag": "S7-1200-IOLINK",
+      "area": "Production / Control Panel",
+      "machine_type": "PLC IO-Link Master Module",
+      "manufacturer": "Siemens AG",
+      "model_number": "SM 1278 4xIO-Link Master"
+    }
+  ],
+  "faults": [
+    {
+      "id": "s7-1200-led-001",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "LED-STOP-YELLOW",
+      "title": "CPU in STOP mode — RUN/STOP LED solid yellow",
+      "description": "RUN/STOP LED is showing solid yellow. CPU has stopped executing the user program.",
+      "meaning": "The CPU is in STOP mode. The user program is not running. Outputs may be in a safe/substitute state. This can be caused by a program download, a fault condition, a deliberate STOP command, or startup configuration.",
+      "causes": [
+        { "rank": 1, "cause": "CPU was placed in STOP mode deliberately via STEP 7 or the operator panel", "likelihood": "high" },
+        { "rank": 2, "cause": "A repairable fault caused the CPU to enter STOP mode — check ERROR LED and diagnostic buffer", "likelihood": "high" },
+        { "rank": 3, "cause": "A program download completed and CPU is waiting to be started", "likelihood": "medium" },
+        { "rank": 4, "cause": "Power was lost and CPU startup mode is configured as STOP", "likelihood": "medium" },
+        { "rank": 5, "cause": "STP() instruction executed in the user program", "likelihood": "low" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Check the ERROR LED. If it is flashing red, resolve the error condition first before attempting to start the CPU.", "caution": false },
+        { "step": 2, "instruction": "Open STEP 7 TIA Portal and go online with the CPU. Check the diagnostic buffer for any error entries that explain why the CPU stopped.", "caution": false },
+        { "step": 3, "instruction": "If no errors are present and the stop was deliberate: click the RUN button in STEP 7 online tools to transition the CPU to RUN mode.", "caution": true },
+        { "step": 4, "instruction": "If the CPU was stopped due to a program download: review any warnings in STEP 7, then start the CPU via the online tools.", "caution": false },
+        { "step": 5, "instruction": "If startup mode is configured as STOP: in STEP 7 device configuration, change startup mode to 'Warm restart - RUN' and download the configuration.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Before starting the CPU, confirm it is safe to do so — check that all connected equipment is in a safe state and operators are clear of moving parts." },
+        { "precaution": "In a GMP environment, a CPU in STOP mode may have caused a process interruption. Notify QA before restarting if the process was running." },
+        { "precaution": "Do not start the CPU if the ERROR LED is active — resolve the fault first." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal", "spec": "Engineering software — required for online diagnostics and mode change" },
+        { "name": "Ethernet cable or PROFINET connection", "spec": "For PC to PLC communication" }
+      ],
+      "parts_required": [],
+      "estimated_fix_mins": 15,
+      "escalation_guidance": "If the CPU cannot be transitioned to RUN mode, or immediately returns to STOP after starting, escalate to the automation/controls engineer. Do not force the CPU into RUN mode if there are active errors in the diagnostic buffer.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-led-002",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "LED-ERROR-FLASH-RED",
+      "title": "ERROR LED flashing red — CPU fault detected",
+      "description": "The ERROR LED on the CPU is flashing red. RUN/STOP LED may show either yellow or green. An error has been detected.",
+      "meaning": "The CPU has detected a fault condition. This could be an internal CPU error, a memory card error, a configuration mismatch (wrong modules fitted), or a program error. The CPU may still be running or may have entered STOP mode depending on severity.",
+      "causes": [
+        { "rank": 1, "cause": "Configuration mismatch — modules installed do not match the hardware configuration downloaded to the CPU", "likelihood": "high" },
+        { "rank": 2, "cause": "Memory card error — inserted memory card has a fault or is incompatible", "likelihood": "medium" },
+        { "rank": 3, "cause": "Internal CPU error — firmware or hardware fault within the CPU", "likelihood": "medium" },
+        { "rank": 4, "cause": "Program error causing a fault OB to execute and trigger the error state", "likelihood": "medium" },
+        { "rank": 5, "cause": "Incorrect CPU version — attempting to run a program built for a different CPU firmware version", "likelihood": "low" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Connect to the CPU via STEP 7 TIA Portal. Open the diagnostic buffer (Online > Diagnostic buffer) to read the exact error description.", "caution": false },
+        { "step": 2, "instruction": "Check whether any signal modules or communication modules have been added, removed, or replaced recently. Compare installed hardware to the hardware configuration in STEP 7.", "caution": false },
+        { "step": 3, "instruction": "If a memory card is inserted: try removing it (with power off), powering back on, and checking if the error clears.", "caution": true },
+        { "step": 4, "instruction": "If a configuration mismatch is identified: update the hardware configuration in STEP 7 to match the installed modules and download the corrected configuration.", "caution": false },
+        { "step": 5, "instruction": "If the error persists and cannot be identified from the diagnostic buffer, perform a memory reset (MRES) via STEP 7. Note: this clears the user program — only do this if you have a backup.", "caution": true }
+      ],
+      "safety_precautions": [
+        { "precaution": "Do not remove or insert modules with power applied unless the module specifically supports hot-swap. Power down the panel before any hardware changes." },
+        { "precaution": "Memory reset (MRES) clears the user program. Ensure a backup copy exists in STEP 7 before performing MRES." },
+        { "precaution": "In a GMP environment, any CPU error must be documented. Record the diagnostic buffer contents before clearing the error." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal", "spec": "Required to read diagnostic buffer" },
+        { "name": "Ethernet/PROFINET cable", "spec": "For PC to PLC connection" }
+      ],
+      "parts_required": [],
+      "estimated_fix_mins": 30,
+      "escalation_guidance": "If the diagnostic buffer shows an internal CPU fault (not a configuration or program issue), the CPU hardware may be defective. Tag out the panel and raise a work order for CPU replacement by a qualified controls engineer.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-led-003",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "LED-ERROR-SOLID-RED",
+      "title": "ERROR LED solid red — defective hardware",
+      "description": "The ERROR LED is showing solid red (not flashing). RUN/STOP LED is solid yellow (STOP mode).",
+      "meaning": "Solid red ERROR LED with solid yellow RUN/STOP indicates defective hardware in the CPU. This is a more serious condition than flashing red and typically indicates the CPU itself is faulty.",
+      "causes": [
+        { "rank": 1, "cause": "CPU hardware defect — internal hardware failure within the CPU module", "likelihood": "high" },
+        { "rank": 2, "cause": "Defect-mode restart failed — fatal firmware error detected and recovery was unsuccessful", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Attempt to connect via STEP 7 TIA Portal to read any available diagnostic information before taking further action.", "caution": false },
+        { "step": 2, "instruction": "Power cycle the CPU (remove and restore 24VDC supply). Observe whether the LED state changes on restart.", "caution": true },
+        { "step": 3, "instruction": "If solid red ERROR persists after power cycle: the CPU is defective. Do not attempt further operation. Tag out the panel.", "caution": true },
+        { "step": 4, "instruction": "Raise a work order for CPU replacement. Note the exact CPU model number (printed on the front of the module) for the replacement order.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "A defective CPU may not control outputs correctly. Ensure all connected equipment is in a safe state before and during investigation." },
+        { "precaution": "Power down the panel fully before removing or replacing the CPU module." },
+        { "precaution": "CPU replacement must be performed by a qualified controls engineer. User program must be downloaded to the replacement CPU before use." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal", "spec": "For diagnostics attempt and program restoration after replacement" },
+        { "name": "Screwdriver", "spec": "For panel access and module removal" }
+      ],
+      "parts_required": [
+        { "part_number": "TBC — check CPU label", "description": "Siemens S7-1200 CPU replacement module — match exact model number on existing unit" }
+      ],
+      "estimated_fix_mins": 60,
+      "escalation_guidance": "Solid red ERROR with solid yellow STOP indicates defective CPU hardware. This requires CPU replacement by a qualified controls engineer. Escalate immediately. Do not attempt to run the machine with a defective CPU.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-led-004",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "LED-ALL-FLASH",
+      "title": "All LEDs flashing — firmware defect or LED test",
+      "description": "All three LEDs (RUN/STOP, ERROR, MAINT) are flashing simultaneously. CPU is not running normally.",
+      "meaning": "All LEDs flashing together indicates either a CPU LED test (normal on power-up, lasts only a few seconds) or a defective CPU firmware condition. If it persists beyond startup it indicates a fatal firmware fault.",
+      "causes": [
+        { "rank": 1, "cause": "Normal LED test during power-up — lasts 2-3 seconds only, then clears automatically", "likelihood": "high" },
+        { "rank": 2, "cause": "Fatal firmware error detected — CPU entered defect mode and firmware fault was identified", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Wait 10-15 seconds after power-up. If all LEDs stop flashing and the CPU transitions to normal operation, this was a normal startup LED test.", "caution": false },
+        { "step": 2, "instruction": "If all LEDs continue flashing beyond startup: power cycle the CPU once. Observe whether the condition clears.", "caution": true },
+        { "step": 3, "instruction": "If all LEDs continue flashing after power cycle: the CPU firmware is defective. Tag out the panel and escalate.", "caution": true }
+      ],
+      "safety_precautions": [
+        { "precaution": "Do not operate connected equipment while all LEDs are flashing — the CPU output state cannot be guaranteed." },
+        { "precaution": "If this occurs on a running process, activate the emergency stop immediately." }
+      ],
+      "tools_required": [],
+      "parts_required": [
+        { "part_number": "TBC", "description": "Siemens S7-1200 CPU replacement (if firmware defect confirmed)" }
+      ],
+      "estimated_fix_mins": 15,
+      "escalation_guidance": "If all LEDs flash continuously after power cycle, the CPU has a firmware defect. This requires a firmware update or CPU replacement by a qualified controls engineer. Escalate immediately.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-led-005",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "LED-MAINT-FLASH",
+      "title": "MAINT LED flashing — memory card inserted or maintenance required",
+      "description": "The yellow MAINT LED is flashing. RUN/STOP LED shows yellow (STOP mode). CPU may have just entered STOP.",
+      "meaning": "The MAINT LED flashes when a memory card is inserted into the CPU. The CPU automatically enters STOP mode when a card is detected. The card must be evaluated before the CPU can return to RUN. MAINT also illuminates solid when forced I/O is active or a battery replacement is needed.",
+      "causes": [
+        { "rank": 1, "cause": "Memory card was inserted into the CPU — CPU stopped to evaluate the card", "likelihood": "high" },
+        { "rank": 2, "cause": "Forced I/O is active on one or more inputs or outputs", "likelihood": "medium" },
+        { "rank": 3, "cause": "Battery board is installed and battery replacement is required", "likelihood": "low" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Check whether a memory card has been recently inserted into the CPU memory card slot.", "caution": false },
+        { "step": 2, "instruction": "If a memory card was inserted intentionally (for program transfer or firmware update): perform one of the following to initiate card evaluation — change CPU to RUN mode, perform memory reset (MRES), or power cycle the CPU.", "caution": true },
+        { "step": 3, "instruction": "If no memory card is present and MAINT is solid (not flashing): connect via STEP 7 and check whether any I/O points are forced. If so, remove the force via the force table.", "caution": false },
+        { "step": 4, "instruction": "If a battery board is installed: check and replace the battery as required.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Only insert memory cards that contain a validated, approved program. Inserting an incorrect program card will overwrite the CPU program." },
+        { "precaution": "In a GMP environment: memory card operations affecting the CPU program must be controlled under change management procedures." },
+        { "precaution": "Forced I/O means certain outputs may be locked ON or OFF regardless of program logic. Review forced points before restarting equipment." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal", "spec": "For force table check and mode transitions" }
+      ],
+      "parts_required": [
+        { "part_number": "TBC", "description": "CPU battery (if battery board fitted and replacement required)" }
+      ],
+      "estimated_fix_mins": 15,
+      "escalation_guidance": "If the MAINT condition cannot be cleared after memory card evaluation or force removal, escalate to the controls engineer.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-led-006",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "LED-STARTUP-FLASH",
+      "title": "RUN/STOP LED alternating green and yellow — CPU in startup or firmware update",
+      "description": "The RUN/STOP LED is alternately flashing green and yellow. CPU is not in normal RUN or STOP state.",
+      "meaning": "Alternating green/yellow on the RUN/STOP LED indicates the CPU is in STARTUP mode — transitioning from STOP to RUN, executing startup OBs. This is normal and should last only a few seconds. It also occurs during a firmware update or program card copy operation.",
+      "causes": [
+        { "rank": 1, "cause": "Normal CPU startup — transitioning from STOP to RUN mode, executing startup OBs", "likelihood": "high" },
+        { "rank": 2, "cause": "Firmware update in progress via memory card or STEP 7", "likelihood": "medium" },
+        { "rank": 3, "cause": "Program copy from memory card in progress", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Wait for the startup sequence to complete. Normal startup takes a few seconds. Do not interrupt power during this phase.", "caution": true },
+        { "step": 2, "instruction": "If a firmware update or card copy is in progress: wait for it to complete. The MAINT LED will flash during this process. Do not remove the memory card or interrupt power.", "caution": true },
+        { "step": 3, "instruction": "If the alternating flash continues for more than 30 seconds without settling: power cycle the CPU once.", "caution": false },
+        { "step": 4, "instruction": "After power cycle, if alternating flash continues, check for errors via STEP 7 diagnostic buffer.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Do not interrupt power during a firmware update — this can corrupt the CPU firmware and render the CPU inoperable." },
+        { "precaution": "Do not remove a memory card during a copy or update operation." }
+      ],
+      "tools_required": [],
+      "parts_required": [],
+      "estimated_fix_mins": 5,
+      "escalation_guidance": "If the startup flash lasts more than 2 minutes, escalate to the controls engineer. A prolonged startup may indicate a startup OB error or hardware fault.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-led-007",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "LED-ERROR-MAINT-FLASH-YELLOW-STOP",
+      "title": "ERROR and MAINT both flashing, RUN/STOP solid yellow — unknown or incompatible CPU configuration",
+      "description": "ERROR LED flashing red, MAINT LED flashing yellow, RUN/STOP LED solid yellow. CPU is in STOP mode.",
+      "meaning": "This specific LED combination indicates an unknown or incompatible version of CPU configuration. Typically caused by attempting to download a program built for a different CPU firmware version — for example downloading an S7-1200 V3.0 program to a V4.0 CPU.",
+      "causes": [
+        { "rank": 1, "cause": "Program downloaded to CPU was built for a different firmware version (e.g. V3.0 program on a V4.0 CPU)", "likelihood": "high" },
+        { "rank": 2, "cause": "Invalid program transfer card used — card contains a program incompatible with this CPU version", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "If a memory card was used: remove the card with power off, power back on, then perform a STOP to RUN transition, memory reset (MRES), or power cycle.", "caution": true },
+        { "step": 2, "instruction": "If an invalid program was downloaded: reset the CPU to factory settings via STEP 7 (Online > Reset to factory settings). Note: this clears the program.", "caution": true },
+        { "step": 3, "instruction": "After recovery: download a compatible, validated program built for the correct CPU firmware version.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Factory reset clears all program and configuration data. Ensure a backup exists in STEP 7 before proceeding." },
+        { "precaution": "In a GMP environment: any program change or reset must be performed under change control procedures." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal", "spec": "Required for factory reset and program download" }
+      ],
+      "parts_required": [],
+      "estimated_fix_mins": 30,
+      "escalation_guidance": "If the CPU cannot be recovered using the steps above, escalate to the controls engineer. CPU replacement may be necessary.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-sm-001",
+      "machine_id": "s7-1200-sm",
+      "fault_code": "SM-DIAG-RED",
+      "title": "Signal Module DIAG LED solid red — module defective or non-operational",
+      "description": "The DIAG LED on a signal module (SM) is showing solid red. The module may not be passing I/O correctly.",
+      "meaning": "A red DIAG LED on an SM indicates the module is defective or non-operational. This may cause loss of inputs or outputs connected to that module. The CPU will typically log a diagnostic error.",
+      "causes": [
+        { "rank": 1, "cause": "Module has developed an internal fault or has failed", "likelihood": "high" },
+        { "rank": 2, "cause": "Module is not correctly seated in the base unit — poor connection", "likelihood": "medium" },
+        { "rank": 3, "cause": "Module configuration in STEP 7 does not match the actual module installed", "likelihood": "medium" },
+        { "rank": 4, "cause": "Module supply voltage missing or insufficient", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Check the CPU ERROR LED and diagnostic buffer in STEP 7 for a related diagnostic message about this module.", "caution": false },
+        { "step": 2, "instruction": "Power down the panel. Remove and firmly reseat the signal module in its base unit. Restore power and check if the red LED clears.", "caution": true },
+        { "step": 3, "instruction": "Verify the 24VDC supply to the module is present and within specification.", "caution": true },
+        { "step": 4, "instruction": "In STEP 7, verify the configured module type matches the actual module installed (check the module part number label).", "caution": false },
+        { "step": 5, "instruction": "If the module LED remains red after reseating and power check, the module is likely defective and requires replacement.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Power down the panel before removing or reseating any module — do not hot-swap unless the module documentation confirms hot-swap support." },
+        { "precaution": "A faulty signal module may cause loss of control inputs or outputs. Identify which I/O is affected before powering down." },
+        { "precaution": "In a GMP environment: module replacement requires documentation and validation checks. Notify QA." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal", "spec": "For diagnostic buffer and module check" },
+        { "name": "Digital multimeter", "spec": "For supply voltage verification" }
+      ],
+      "parts_required": [
+        { "part_number": "TBC — check module label", "description": "Replacement S7-1200 signal module — match exact model number on existing module" }
+      ],
+      "estimated_fix_mins": 30,
+      "escalation_guidance": "If module replacement is required, raise a work order. Signal module replacement must be followed by I/O verification checks before restarting the process.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-iolink-001",
+      "machine_id": "s7-1200-iolink",
+      "fault_code": "IOL-SHORT-CIRCUIT",
+      "title": "IO-Link short circuit on process cable",
+      "description": "Diagnostic alarm: Short-circuit detected. Error code 1804 (master) or 7710 (device). F LED on affected port is ON.",
+      "meaning": "A short circuit has been detected on the IO-Link process cable or at the IO-Link device connected to the affected port. The port has been protected and may have shut down to prevent damage.",
+      "causes": [
+        { "rank": 1, "cause": "Wiring damage — short circuit between signal and supply conductors in the cable to the IO-Link device", "likelihood": "high" },
+        { "rank": 2, "cause": "IO-Link device internally shorted — device failure causing short on the port", "likelihood": "medium" },
+        { "rank": 3, "cause": "Incorrect wiring — cable connected incorrectly at device or master end", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Identify which port (1–4) the fault is on using the F LED indicator — the lit F LED shows the affected port.", "caution": false },
+        { "step": 2, "instruction": "Isolate the 24VDC supply to the affected port. Disconnect the cable at the master end.", "caution": true },
+        { "step": 3, "instruction": "Inspect the cable along its full run for visible damage, crushing, or chafing. Replace if damaged.", "caution": false },
+        { "step": 4, "instruction": "Check the wiring at both the master and device ends against the wiring diagram.", "caution": false },
+        { "step": 5, "instruction": "Reconnect and restore power. Check if the fault clears. If the F LED remains on, the IO-Link device itself may be faulty — replace the device.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Isolate the supply to the affected port before disconnecting cables — 24VDC is present on IO-Link ports." },
+        { "precaution": "If the short circuit is on a safety-relevant IO-Link device, notify the safety engineer before taking corrective action." }
+      ],
+      "tools_required": [
+        { "name": "Digital multimeter", "spec": "For continuity and short circuit verification on cable" },
+        { "name": "Replacement IO-Link cable", "spec": "Correct type and length for the installation" }
+      ],
+      "parts_required": [
+        { "part_number": "TBC", "description": "IO-Link cable (if replacement required)" },
+        { "part_number": "TBC", "description": "IO-Link device (if device found to be faulty)" }
+      ],
+      "estimated_fix_mins": 25,
+      "escalation_guidance": "If the short circuit cannot be located in the cable and the device tests OK, the SM 1278 port itself may be damaged. Raise a work order for module inspection.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-iolink-002",
+      "machine_id": "s7-1200-iolink",
+      "fault_code": "IOL-WIRE-BREAK",
+      "title": "IO-Link wire break — no device connected or signal line break",
+      "description": "Diagnostic alarm: Wire break. Error code 1800. F LED on affected port is ON. COM LED on affected port is OFF or flashing.",
+      "meaning": "The IO-Link master cannot communicate with the device on the affected port. Either no device is connected, the signal cable is broken, or the IO-Link device has failed and cannot communicate.",
+      "causes": [
+        { "rank": 1, "cause": "IO-Link device is not connected or has been disconnected", "likelihood": "high" },
+        { "rank": 2, "cause": "Break or damage on the signal line (C/Q conductor) of the IO-Link cable", "likelihood": "high" },
+        { "rank": 3, "cause": "IO-Link device has failed and cannot establish communication", "likelihood": "medium" },
+        { "rank": 4, "cause": "Connector at device or master end is loose or corroded", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Identify the affected port using the F LED and COM LED indicators.", "caution": false },
+        { "step": 2, "instruction": "Physically verify the IO-Link device is connected to the port and the connector is fully seated.", "caution": false },
+        { "step": 3, "instruction": "Inspect the cable for visible damage along its full run. Check connectors at both ends for corrosion or damage.", "caution": false },
+        { "step": 4, "instruction": "If cable appears intact: disconnect the cable from the device end and use a multimeter to check continuity of the C/Q conductor (pin 4) end-to-end.", "caution": false },
+        { "step": 5, "instruction": "Replace the cable if continuity check fails. Reconnect and verify the COM LED turns on solid (device connected and active).", "caution": false },
+        { "step": 6, "instruction": "If cable is intact but device still does not communicate: replace the IO-Link device.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "A disconnected IO-Link sensor or actuator may cause the process to operate incorrectly. Identify the function of the affected device before taking action." }
+      ],
+      "tools_required": [
+        { "name": "Digital multimeter", "spec": "For cable continuity check" }
+      ],
+      "parts_required": [
+        { "part_number": "TBC", "description": "IO-Link cable (if replacement required)" },
+        { "part_number": "TBC", "description": "IO-Link device (if device replacement required)" }
+      ],
+      "estimated_fix_mins": 20,
+      "escalation_guidance": "If wire break alarm persists after cable and device replacement, the IO-Link port on the SM 1278 may be faulty. Raise a work order for module inspection.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-iolink-003",
+      "machine_id": "s7-1200-iolink",
+      "fault_code": "IOL-PARAM-ERROR",
+      "title": "IO-Link parameter assignment error — device configuration mismatch",
+      "description": "Diagnostic alarm: Parameter assignment error. Error codes 1882, 1883, 1802, 1886, 6320, or 6321. Module could not be configured or device does not match configuration.",
+      "meaning": "The IO-Link master could not configure the connected device, or the device found on the port does not match the device that was configured in STEP 7. This is often caused by replacing a device with a different type, or a configuration error.",
+      "causes": [
+        { "rank": 1, "cause": "IO-Link device replaced with a different type that does not match the configuration", "likelihood": "high" },
+        { "rank": 2, "cause": "IO-Link device configuration in S7-PCT does not match the actual connected device", "likelihood": "high" },
+        { "rank": 3, "cause": "Storage error in the IO-Link master — internal configuration data corrupted", "likelihood": "low" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Identify the affected port. Check which IO-Link device is physically connected and compare its type and part number to the device configured in S7-PCT.", "caution": false },
+        { "step": 2, "instruction": "If the wrong device is connected: reconnect the correct device and check if the alarm clears.", "caution": false },
+        { "step": 3, "instruction": "If the device is correct but the alarm persists: open S7-PCT, verify the port configuration matches the connected device specifications, update the configuration if necessary, and download.", "caution": false },
+        { "step": 4, "instruction": "After configuration update: power cycle the IO-Link master module to force re-parameterisation.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Configuration changes to IO-Link devices must be validated before returning the equipment to production use." },
+        { "precaution": "In a GMP environment: parameter changes to IO-Link devices used in process control must go through change management." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal with S7-PCT", "spec": "S7-PCT port configuration tool for IO-Link parameterisation" }
+      ],
+      "parts_required": [],
+      "estimated_fix_mins": 30,
+      "escalation_guidance": "If the parameterisation error cannot be resolved through configuration, escalate to the controls engineer. An engineering-level investigation of the IO-Link device compatibility may be required.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-iolink-004",
+      "machine_id": "s7-1200-iolink",
+      "fault_code": "IOL-SUPPLY-MISSING",
+      "title": "IO-Link device supply voltage missing",
+      "description": "Diagnostic alarm: Supply voltage missing. Error codes 1806 or 1807. L+ supply voltage for device is absent or too low (below 20V).",
+      "meaning": "The 24VDC supply to the IO-Link device on the affected port is missing or too low. The device cannot operate without adequate power.",
+      "causes": [
+        { "rank": 1, "cause": "24VDC supply to the IO-Link master module (L+) is absent or interrupted", "likelihood": "high" },
+        { "rank": 2, "cause": "Supply voltage is present but below 20V minimum — under-voltage condition", "likelihood": "medium" },
+        { "rank": 3, "cause": "Blown fuse or open circuit in the supply wiring to the module or device", "likelihood": "medium" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Measure the L+ supply voltage at the IO-Link master module terminals using a multimeter. It should be 24VDC within tolerance (typically 20.4–28.8V).", "caution": true },
+        { "step": 2, "instruction": "If voltage is absent: trace the supply circuit upstream to identify a blown fuse, open isolator, or supply failure.", "caution": true },
+        { "step": 3, "instruction": "If voltage is present but low: check the power supply unit output under load. Replace the PSU if the output is out of specification.", "caution": true },
+        { "step": 4, "instruction": "Restore the correct supply voltage and verify the diagnostic alarm clears.", "caution": false }
+      ],
+      "safety_precautions": [
+        { "precaution": "Electrical measurements must only be performed by a competent person. Follow site electrical safety procedures." },
+        { "precaution": "Ensure the panel is electrically isolated before investigating fuses or supply wiring." }
+      ],
+      "tools_required": [
+        { "name": "Digital multimeter", "spec": "CAT III rated for panel measurements" }
+      ],
+      "parts_required": [
+        { "part_number": "TBC", "description": "Replacement fuse (correct rating — check panel drawings)" },
+        { "part_number": "TBC", "description": "24VDC power supply unit (if PSU replacement required)" }
+      ],
+      "estimated_fix_mins": 20,
+      "escalation_guidance": "Electrical fault diagnosis in panels must be performed by a competent person. If the supply fault cannot be identified, escalate to the electrical engineer.",
+      "status": "approved",
+      "version": 1
+    },
+    {
+      "id": "s7-1200-cpu-stop-program",
+      "machine_id": "s7-1200-cpu",
+      "fault_code": "CPU-STOP-PROGRAM-ERROR",
+      "title": "CPU went to STOP due to program or configuration error",
+      "description": "CPU unexpectedly entered STOP mode during operation. No obvious external cause. ERROR LED may be flashing.",
+      "meaning": "The CPU has entered STOP mode during normal operation due to a program execution error or configuration fault. Common causes include a time error (watchdog), a module failing during operation, or a program instruction causing a fatal error.",
+      "causes": [
+        { "rank": 1, "cause": "Scan cycle time exceeded — program taking longer than the configured watchdog time to execute", "likelihood": "high" },
+        { "rank": 2, "cause": "A signal module failed or was disconnected during operation, causing a configuration error", "likelihood": "high" },
+        { "rank": 3, "cause": "Program instruction accessed invalid memory or caused a divide-by-zero or similar runtime error", "likelihood": "medium" },
+        { "rank": 4, "cause": "PROFINET device became unavailable during RUN causing the CPU to stop", "likelihood": "medium" },
+        { "rank": 5, "cause": "STP() instruction in the user program was triggered by process logic", "likelihood": "low" }
+      ],
+      "actions": [
+        { "step": 1, "instruction": "Connect to the CPU via STEP 7 TIA Portal immediately — before restarting. Open the diagnostic buffer to read the exact stop cause and timestamp.", "caution": false },
+        { "step": 2, "instruction": "Record the diagnostic buffer contents — take a screenshot or note the entries for your records.", "caution": false },
+        { "step": 3, "instruction": "Check all signal modules and PROFINET devices are physically present, connected, and showing green DIAG LEDs.", "caution": false },
+        { "step": 4, "instruction": "Address the root cause identified in the diagnostic buffer before restarting.", "caution": true },
+        { "step": 5, "instruction": "Only restart the CPU via STEP 7 RUN command once the root cause has been identified and addressed.", "caution": true }
+      ],
+      "safety_precautions": [
+        { "precaution": "Do not restart the CPU without first identifying why it stopped. Restarting without investigation risks recurrence or unsafe operation." },
+        { "precaution": "In a GMP environment: an unexpected CPU stop during a batch or process run is a process deviation. Record the time and circumstances and notify QA." },
+        { "precaution": "If the stop was caused by a PROFINET device failure: ensure the device is functioning correctly before restarting." }
+      ],
+      "tools_required": [
+        { "name": "STEP 7 TIA Portal", "spec": "Essential — diagnostic buffer access required" },
+        { "name": "Ethernet/PROFINET cable", "spec": "For PC to PLC connection" }
+      ],
+      "parts_required": [],
+      "estimated_fix_mins": 30,
+      "escalation_guidance": "If the diagnostic buffer shows a program error (not a module or hardware fault), escalate to the controls/automation engineer for program investigation. Do not modify the program without engineering authorisation.",
+      "status": "approved",
+      "version": 1
+    }
+  ]
+}
