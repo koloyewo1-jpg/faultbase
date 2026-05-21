@@ -1,8 +1,15 @@
 'use client'
 import { useState, useRef } from 'react'
 
+const MACHINES = [
+  { id: 's7-1200-cpu', label: 'S7-1200 CPU' },
+  { id: 's7-1200-sm', label: 'S7-1200 Signal Module' },
+  { id: 's7-1200-iolink', label: 'S7-1200 IO-Link Master' },
+]
+
 export default function DiagnosePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [machineId, setMachineId] = useState('s7-1200-cpu')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState('')
@@ -16,13 +23,15 @@ export default function DiagnosePage() {
     setResult(null)
     setError('')
     try {
-      const res = await fetch(window.location.origin + '/api/diagnose', {
+      const res = await fetch('/api/diagnose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ machine_id: 's7-1200-cpu', input: trimmed }),
+        body: JSON.stringify({ machine_id: machineId, input: trimmed }),
       })
       const data = await res.json()
-      if (!data.matched) {
+      if (data.error) {
+        setError('Diagnosis service error — please try again.')
+      } else if (!data.matched) {
         setError(data.message)
       } else {
         setResult(data.diagnosis)
@@ -62,25 +71,29 @@ export default function DiagnosePage() {
         <span style={{ fontSize: 11, color: '#6b7280' }}>Maintenance Decision Support</span>
       </div>
 
-      <div style={{ maxWidth: 580, margin: '0 auto', padding: '20px 16px' }}>
+      <div style={{ maxWidth: 580, margin: '0 auto', padding: '20px 16px', boxSizing: 'border-box', width: '100%' }}>
 
         {/* Input card */}
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 16px', marginBottom: 16 }}>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 16px', marginBottom: 16, boxSizing: 'border-box' }}>
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
               Machine
             </div>
-            <select style={{ width: '100%', padding: '10px 12px', fontSize: 15, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111827' }}>
-              <option value="s7-1200-cpu">S7-1200 CPU</option>
-              <option value="s7-1200-sm">S7-1200 Signal Module</option>
-              <option value="s7-1200-iolink">S7-1200 IO-Link Master</option>
+            <select
+              value={machineId}
+              onChange={e => setMachineId(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', fontSize: 15, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111827', boxSizing: 'border-box', appearance: 'auto' }}
+            >
+              {MACHINES.map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
             </select>
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-              Describe the fault
+              Describe the fault — plain English or fault code
             </div>
             <textarea
               ref={inputRef}
@@ -94,7 +107,8 @@ export default function DiagnosePage() {
           <button
             type="button"
             onClick={runDiagnosis}
-            style={{ width: '100%', padding: '16px', fontSize: 16, fontWeight: 700, background: loading ? '#93c5fd' : '#185FA5', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'system-ui, sans-serif', display: 'block' }}
+            disabled={loading}
+            style={{ width: '100%', padding: '16px', fontSize: 16, fontWeight: 700, background: loading ? '#93c5fd' : '#185FA5', color: '#fff', border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'system-ui, sans-serif', display: 'block', boxSizing: 'border-box' }}
           >
             {loading ? 'Running diagnosis...' : 'Run diagnosis'}
           </button>
@@ -103,7 +117,7 @@ export default function DiagnosePage() {
 
         {/* Examples */}
         {showExamples && !result && !error && (
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px', marginBottom: 16, boxSizing: 'border-box' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               Try these examples
             </div>
@@ -178,7 +192,7 @@ export default function DiagnosePage() {
                 Step-by-step actions
               </div>
               {result.actions?.map((a: any) => (
-                <div key={a.step} style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3f4f6', background: a.caution ? '#fffbeb' : 'transparent' }}>
+                <div key={a.step} style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3f4f6', background: a.caution ? '#fffbeb' : 'transparent', borderRadius: a.caution ? 6 : 0, paddingLeft: a.caution ? 8 : 0 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', minWidth: 20, flexShrink: 0 }}>{a.step}.</span>
                   <span style={{ fontSize: 13, color: '#111827', flex: 1, lineHeight: 1.5 }}>{a.instruction}</span>
                   {a.caution && (
