@@ -4,19 +4,28 @@ export default function HomePage() {
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', color: '#111827', background: '#fff' }}>
 
+      <style>{`
+        @media (max-width: 600px) {
+          .nav-links { display: none !important; }
+          .how-grid { grid-template-columns: 1fr !important; }
+          .hero-buttons { flex-direction: column !important; align-items: stretch !important; }
+          .hero-buttons a { text-align: center !important; }
+        }
+      `}</style>
+
       {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px', borderBottom: '1px solid #e5e7eb', background: '#fff', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontSize: 18, fontWeight: 700 }}>
           Kolatron<span style={{ color: '#185FA5' }}>.ai</span>
         </div>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+        <div className="nav-links" style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
           <a href="#how" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>How it works</a>
           <a href="#features" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>Features</a>
           <a href="#security" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>Security</a>
-          <Link href="/diagnose" style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: '#185FA5', color: '#fff', borderRadius: 8, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-            Try demo →
-          </Link>
         </div>
+        <Link href="/diagnose" style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: '#185FA5', color: '#fff', borderRadius: 8, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          Try demo →
+        </Link>
       </nav>
 
       {/* Hero */}
@@ -31,7 +40,7 @@ export default function HomePage() {
         <p style={{ fontSize: 'clamp(15px, 2vw, 17px)', color: '#6b7280', lineHeight: 1.7, maxWidth: 560, margin: '0 auto 16px' }}>
           Kolatron.ai gives manufacturing teams instant, structured fault diagnosis — powered by your own approved knowledge base, not random AI guesswork. Built for food, pharma, automotive, chemical, packaging, and every other manufacturing environment.
         </p>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <div className="hero-buttons" style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
           <a href="#early-access" style={{ padding: '13px 28px', fontSize: 15, fontWeight: 600, background: '#185FA5', color: '#fff', borderRadius: 8, textDecoration: 'none' }}>
             Request early access — free
           </a>
@@ -64,7 +73,9 @@ export default function HomePage() {
           <p style={{ fontSize: 15, color: '#6b7280', lineHeight: 1.7, maxWidth: 540, marginBottom: 40 }}>
             Your engineers build the knowledge base. Your technicians get the answers. Everything stays inside your approved data.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 32 }}>
+          <div className="how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 32 }}>
+
+            {/* Steps */}
             <div>
               {[
                 ['Upload your equipment manual', 'PDF or DOCX. Kolatron extracts every fault code, cause, and action into a structured knowledge base. The manual is deleted within 24 hours — only your structured data remains.'],
@@ -84,7 +95,7 @@ export default function HomePage() {
             </div>
 
             {/* Demo preview card */}
-            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', alignSelf: 'start' }}>
               <div style={{ padding: '10px 14px', borderBottom: '1px solid #e5e7eb', background: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'flex', gap: 4 }}>
                   {['#E24B4A', '#EF9F27', '#639922'].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: '50%', background: c }} />)}
@@ -104,7 +115,7 @@ export default function HomePage() {
                   <strong style={{ color: '#111827' }}>What this means: </strong>CPU detected a fault — configuration mismatch, memory error, or hardware fault.
                 </div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Likely causes (ranked)</div>
-                {[['#1', 'Configuration mismatch — modules don\'t match hardware config', 'high'], ['#2', 'Memory card error — faulty or incompatible card', 'medium'], ['#3', 'Internal CPU error — firmware or hardware fault', 'medium']].map(([rank, cause, lh]) => (
+                {[['#1', "Configuration mismatch — modules don't match hardware config", 'high'], ['#2', 'Memory card error — faulty or incompatible card', 'medium'], ['#3', 'Internal CPU error — firmware or hardware fault', 'medium']].map(([rank, cause, lh]) => (
                   <div key={rank} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: rank !== '#3' ? '1px solid #f3f4f6' : 'none', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: 9, fontWeight: 600, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '2px 5px', flexShrink: 0 }}>{rank}</span>
                     <span style={{ fontSize: 12, color: '#111827', flex: 1 }}>{cause}</span>
@@ -116,6 +127,7 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </div>
@@ -249,8 +261,6 @@ export default function HomePage() {
           <p style={{ fontSize: 15, color: '#6b7280', lineHeight: 1.7, marginBottom: 28 }}>
             Join the early access programme. We work with you personally to get your first machine's knowledge base live. Free, no commitment, no credit card.
           </p>
-
-          {/* Tally form embed — replace with your Tally form URL */}
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '24px 20px', marginBottom: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: '#111827' }}>Request early access</div>
             <iframe
@@ -261,11 +271,9 @@ export default function HomePage() {
               title="Early access request form"
             />
           </div>
-
           <p style={{ fontSize: 12, color: '#9ca3af' }}>
             No credit card · No setup fee · We help you onboard your first machine
           </p>
-
           <div style={{ marginTop: 20 }}>
             <Link href="/diagnose" style={{ fontSize: 13, color: '#185FA5', textDecoration: 'none', fontWeight: 500 }}>
               Or try the live demo first →
