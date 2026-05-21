@@ -75,7 +75,7 @@ Escalation: ${f.escalation_guidance}
 
     // Call AI with strict instructions
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       system: `You are a maintenance support assistant in a GMP manufacturing environment.
 STRICT RULES:
