@@ -266,7 +266,7 @@ export default function WorldPage() {
       // Phase 5: Browser polls refine
       let refineGlbUrl: string
       try {
-        refineGlbUrl = await pollTask(refine_task_id, 180_000)
+        refineGlbUrl = await pollTask(refine_task_id, 600_000)
       } catch {
         // Silently keep the preview model if refine fails or times out
         if (meshyGenIdRef.current === genId) setMeshyUpgrading(false)
