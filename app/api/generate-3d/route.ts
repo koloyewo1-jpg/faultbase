@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const maxDuration = 300
+
 const MESHY_BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d'
-const POLL_MS = 3_000
-const TIMEOUT_MS = 180_000
+const POLL_MS = 5_000
+const TIMEOUT_MS = 300_000
 
 async function startTask(prompt: string, apiKey: string): Promise<string> {
   const res = await fetch(MESHY_BASE, {
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ error: 'Generation timed out after 120 seconds' }, { status: 504 })
+    return NextResponse.json({ error: 'Generation timed out after 300 seconds' }, { status: 504 })
   } catch (error: any) {
     console.error('generate-3d error:', error?.message)
     return NextResponse.json(

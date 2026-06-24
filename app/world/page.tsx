@@ -196,10 +196,10 @@ export default function WorldPage() {
         <div style={{ marginBottom: 28 }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 11, fontWeight: 600, color: '#78350f',
-            background: '#fef3c7', borderRadius: 20, padding: '4px 14px', marginBottom: 12,
+            fontSize: 11, fontWeight: 600, color: '#0C447C',
+            background: '#E6F1FB', borderRadius: 20, padding: '4px 14px', marginBottom: 12,
           }}>
-            Powered by Meshy AI · Photorealistic 3D
+            Powered by Kolatron.ai
           </div>
           <h1 style={{ fontSize: 'clamp(22px, 4vw, 30px)', fontWeight: 700, margin: '0 0 8px', color: '#111827' }}>
             3D Component Generator
