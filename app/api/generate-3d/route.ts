@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import FormData from 'form-data'
 
 export const maxDuration = 300
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const MESHY_TEXT_TO_3D = 'https://api.meshy.ai/openapi/v2/text-to-3d'
-const MESHY_IMAGE_TO_3D = 'https://api.meshy.ai/openapi/v1/image-to-3d'
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent'
+const MESHY_BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d'
 const POLL_MS = 5_000
 const TIMEOUT_MS = 300_000
 
@@ -46,116 +43,46 @@ Apply the same principle to any industrial component the user types.`,
   }
 }
 
-// ── Step 2a: Gemini image generation ────────────────────────────────────────
+// ── Meshy helpers ────────────────────────────────────────────────────────────
 
-async function generateConceptImage(enhancedPrompt: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const geminiKey = process.env.GEMINI_API_KEY
-  if (!geminiKey) throw new Error('Gemini API key not configured')
-
-  const res = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+async function startPreview(prompt: string, apiKey: string): Promise<string> {
+  const res = await fetch(MESHY_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: `Generate a photorealistic product image of: ${enhancedPrompt}. White background, studio lighting, single object centered, high detail, engineering quality render.`,
-        }],
-      }],
-      generationConfig: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
-    }),
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'preview', prompt, art_style: 'realistic', should_remesh: true }),
   })
-
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`Gemini image generation failed ${res.status}: ${body.slice(0, 200)}`)
+    throw new Error(`Meshy preview start failed ${res.status}: ${body.slice(0, 200)}`)
   }
-
-  const data = await res.json()
-  const parts: any[] = data?.candidates?.[0]?.content?.parts ?? []
-  const imagePart = parts.find((p: any) => p.inlineData)
-  if (!imagePart) throw new Error('Gemini returned no image in response')
-
-  const { data: base64data, mimeType } = imagePart.inlineData
-  return { buffer: Buffer.from(base64data, 'base64'), mimeType: mimeType ?? 'image/jpeg' }
+  return (await res.json()).result as string
 }
 
-// ── Step 2b: Meshy image-to-3D ───────────────────────────────────────────────
-
-async function startImageTo3DTask(imageBuffer: Buffer, imageMimeType: string, apiKey: string): Promise<string> {
-  const form = new FormData()
-  form.append('image_file', imageBuffer, {
-    filename: 'component.jpg',
-    contentType: imageMimeType,
-  })
-  form.append('enable_pbr', 'true')
-
-  const res = await fetch(MESHY_IMAGE_TO_3D, {
+async function startRefine(previewTaskId: string, apiKey: string): Promise<string> {
+  const res = await fetch(MESHY_BASE, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...form.getHeaders(),
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body: form.getBuffer() as any,
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'refine', preview_task_id: previewTaskId, texture_richness: 'high' }),
   })
-
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`Meshy image-to-3D start failed ${res.status}: ${body.slice(0, 200)}`)
+    throw new Error(`Meshy refine start failed ${res.status}: ${body.slice(0, 200)}`)
   }
-  const data = await res.json()
-  return data.result as string
+  return (await res.json()).result as string
 }
 
-async function pollImageTask(id: string, apiKey: string) {
-  const res = await fetch(`${MESHY_IMAGE_TO_3D}/${id}`, {
+async function pollTask(id: string, apiKey: string) {
+  const res = await fetch(`${MESHY_BASE}/${id}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
-  if (!res.ok) throw new Error(`Meshy image-to-3D poll failed: ${res.status}`)
+  if (!res.ok) throw new Error(`Meshy poll failed: ${res.status}`)
   return res.json()
 }
-
-// ── Fallback: Meshy text-to-3D ───────────────────────────────────────────────
-
-async function startTextTo3DTask(prompt: string, apiKey: string): Promise<string> {
-  const res = await fetch(MESHY_TEXT_TO_3D, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      mode: 'preview',
-      prompt,
-      art_style: 'realistic',
-      should_remesh: true,
-    }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Meshy text-to-3D start failed ${res.status}: ${body.slice(0, 200)}`)
-  }
-  const data = await res.json()
-  return data.result as string
-}
-
-async function pollTextTask(id: string, apiKey: string) {
-  const res = await fetch(`${MESHY_TEXT_TO_3D}/${id}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  })
-  if (!res.ok) throw new Error(`Meshy text-to-3D poll failed: ${res.status}`)
-  return res.json()
-}
-
-// ── Shared helpers ───────────────────────────────────────────────────────────
 
 async function fetchGlbAsBase64(glbUrl: string): Promise<string> {
   const glbRes = await fetch(glbUrl)
   if (!glbRes.ok) throw new Error(`Failed to fetch GLB binary: ${glbRes.status}`)
-  const buffer = await glbRes.arrayBuffer()
-  return Buffer.from(buffer).toString('base64')
+  return Buffer.from(await glbRes.arrayBuffer()).toString('base64')
 }
 
 function sleep(ms: number) {
@@ -178,71 +105,63 @@ export async function POST(req: NextRequest) {
 
     const deadline = Date.now() + TIMEOUT_MS
 
-    // Step 1: Enhance prompt with Claude
+    // Step 1: Enhance prompt
     console.log('Step 1: Enhancing prompt with Claude...')
     const enhanced = await enhancePrompt(prompt.trim())
     console.log('Enhanced prompt:', enhanced)
 
-    // ── Primary path: Gemini image → Meshy image-to-3D ──────────────────────
-    try {
-      console.log('Step 2: Calling Gemini for image...')
-      const { buffer: imageBuffer, mimeType: imageMimeType } = await generateConceptImage(enhanced)
-      console.log('Gemini result: success, mimeType:', imageMimeType, 'bytes:', imageBuffer.length)
+    // Step 2: Preview
+    console.log('Step 2: Starting Meshy text-to-3D preview...')
+    const previewId = await startPreview(enhanced, apiKey)
+    console.log('Preview task ID:', previewId)
 
-      console.log('Step 3: Sending to Meshy image-to-3D...')
-      const taskId = await startImageTo3DTask(imageBuffer, imageMimeType, apiKey)
-      console.log('Meshy image-to-3D task ID:', taskId)
+    let previewGlbUrl: string | null = null
+    while (Date.now() < deadline) {
+      await sleep(POLL_MS)
+      const task = await pollTask(previewId, apiKey)
+      console.log('Step 4: Polling Meshy preview... status:', task.status)
 
-      while (Date.now() < deadline) {
-        await sleep(POLL_MS)
-        const task = await pollImageTask(taskId, apiKey)
-        console.log('Step 4: Polling Meshy image-to-3D... status:', task.status)
-
-        if (task.status === 'SUCCEEDED') {
-          const glbUrl = task.model_urls?.glb
-          console.log('Final GLB URL:', glbUrl)
-          if (!glbUrl) throw new Error('image-to-3D succeeded but GLB URL is missing')
-          const model_data = await fetchGlbAsBase64(glbUrl)
-          return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
-        }
-
-        if (task.status === 'FAILED' || task.status === 'EXPIRED') {
-          throw new Error(`image-to-3D task ${task.status}: ${task.task_error?.message ?? ''}`)
-        }
+      if (task.status === 'SUCCEEDED') {
+        previewGlbUrl = task.model_urls?.glb ?? null
+        console.log('Preview succeeded, GLB URL:', previewGlbUrl)
+        break
       }
-
-      throw new Error('image-to-3D timed out')
-    } catch (geminiError: any) {
-      console.error('Gemini result: failed —', geminiError?.message)
-      console.log('Step 3: Falling back to Meshy text-to-3D...')
+      if (task.status === 'FAILED' || task.status === 'EXPIRED') {
+        const reason = task.task_error?.message || task.status
+        return NextResponse.json({ error: `Preview failed: ${reason}` }, { status: 500 })
+      }
     }
 
-    // ── Fallback: Meshy text-to-3D with enhanced prompt ─────────────────────
-    const taskId = await startTextTo3DTask(enhanced, apiKey)
-    console.log('Meshy text-to-3D task ID:', taskId)
+    if (!previewGlbUrl) {
+      return NextResponse.json({ error: 'Generation timed out during preview' }, { status: 504 })
+    }
+
+    // Step 3: Refine
+    console.log('Step 5: Starting refine step, preview ID:', previewId)
+    const refineId = await startRefine(previewId, apiKey)
+    console.log('Refine task ID:', refineId)
 
     while (Date.now() < deadline) {
       await sleep(POLL_MS)
-      const task = await pollTextTask(taskId, apiKey)
-      console.log('Step 4: Polling Meshy text-to-3D... status:', task.status)
+      const task = await pollTask(refineId, apiKey)
+      console.log('Refine status:', task.status)
 
       if (task.status === 'SUCCEEDED') {
-        const glbUrl = task.model_urls?.glb
-        console.log('Final GLB URL:', glbUrl)
-        if (!glbUrl) {
-          return NextResponse.json({ error: 'Generation succeeded but GLB URL is missing' }, { status: 500 })
-        }
+        const glbUrl = task.model_urls?.glb ?? previewGlbUrl
+        console.log('Refine complete, GLB URL:', glbUrl)
         const model_data = await fetchGlbAsBase64(glbUrl)
         return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
       }
-
       if (task.status === 'FAILED' || task.status === 'EXPIRED') {
-        const reason = task.task_error?.message || task.status
-        return NextResponse.json({ error: `Generation failed: ${reason}` }, { status: 500 })
+        console.error('Refine failed, falling back to preview GLB')
+        break
       }
     }
 
-    return NextResponse.json({ error: 'Generation timed out after 300 seconds' }, { status: 504 })
+    // Fallback: return preview GLB if refine failed or timed out
+    console.log('Final GLB URL (preview fallback):', previewGlbUrl)
+    const model_data = await fetchGlbAsBase64(previewGlbUrl)
+    return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
 
   } catch (error: any) {
     console.error('generate-3d error:', error?.message)
