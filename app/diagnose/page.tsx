@@ -2,9 +2,15 @@
 import { useState, useRef, useEffect } from 'react'
 
 const MACHINES = [
-  { id: 's7-1200-cpu', label: 'S7-1200 CPU' },
-  { id: 's7-1200-sm', label: 'S7-1200 Signal Module' },
-  { id: 's7-1200-iolink', label: 'S7-1200 IO-Link Master' },
+  { id: 'general-conveyor', label: 'Conveyor' },
+  { id: 'general-pneumatics', label: 'Pneumatic System' },
+  { id: 'general-sensors', label: 'Sensors' },
+  { id: 'general-motors', label: 'Motors' },
+  { id: 'general-vfd', label: 'VFD / Variable Speed Drive' },
+  { id: 'general-plc', label: 'PLC / Controls' },
+  { id: 'general-safety', label: 'Safety Systems' },
+  { id: 'general-packaging', label: 'Packaging Machinery' },
+  { id: 'general-reject', label: 'Reject Systems' },
 ]
 
 const LOADING_STEPS = [
@@ -93,7 +99,7 @@ function LoadingCard() {
 
 export default function DiagnosePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const [machineId, setMachineId] = useState('s7-1200-cpu')
+  const [machineId, setMachineId] = useState('general-conveyor')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState('')
