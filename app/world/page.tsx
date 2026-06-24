@@ -4,11 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 
 // Each entry: [startSeconds, label]
 const LOADING_STAGES: [number, string][] = [
-  [0,   'Enhancing your description…'],
-  [20,  'Generating concept image…'],
-  [50,  'Converting image to 3D model…'],
-  [150, 'Applying textures and materials…'],
-  [240, 'Almost ready…'],
+  [0,   'Analysing description…'],
+  [20,  'Building 3D model…'],
+  [80,  'Applying materials…'],
+  [200, 'Almost ready…'],
 ]
 
 const MESHY_EXAMPLES = [

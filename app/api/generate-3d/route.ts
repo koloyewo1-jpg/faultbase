@@ -6,6 +6,7 @@ export const maxDuration = 300
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const MESHY_TEXT_TO_3D = 'https://api.meshy.ai/openapi/v2/text-to-3d'
 const MESHY_IMAGE_TO_3D = 'https://api.meshy.ai/openapi/v1/image-to-3d'
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent'
 const POLL_MS = 5_000
@@ -45,7 +46,7 @@ Apply the same principle to any industrial component the user types.`,
   }
 }
 
-// ── Step 2: Gemini image generation ─────────────────────────────────────────
+// ── Step 2a: Gemini image generation ────────────────────────────────────────
 
 async function generateConceptImage(enhancedPrompt: string): Promise<{ buffer: Buffer; mimeType: string }> {
   const geminiKey = process.env.GEMINI_API_KEY
@@ -80,7 +81,7 @@ async function generateConceptImage(enhancedPrompt: string): Promise<{ buffer: B
   return { buffer: Buffer.from(base64data, 'base64'), mimeType: mimeType ?? 'image/jpeg' }
 }
 
-// ── Step 3: Meshy image-to-3D ────────────────────────────────────────────────
+// ── Step 2b: Meshy image-to-3D ───────────────────────────────────────────────
 
 async function startImageTo3DTask(imageBuffer: Buffer, imageMimeType: string, apiKey: string): Promise<string> {
   const form = new FormData()
@@ -108,13 +109,47 @@ async function startImageTo3DTask(imageBuffer: Buffer, imageMimeType: string, ap
   return data.result as string
 }
 
-async function pollTask(id: string, apiKey: string) {
+async function pollImageTask(id: string, apiKey: string) {
   const res = await fetch(`${MESHY_IMAGE_TO_3D}/${id}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
-  if (!res.ok) throw new Error(`Meshy poll failed: ${res.status}`)
+  if (!res.ok) throw new Error(`Meshy image-to-3D poll failed: ${res.status}`)
   return res.json()
 }
+
+// ── Fallback: Meshy text-to-3D ───────────────────────────────────────────────
+
+async function startTextTo3DTask(prompt: string, apiKey: string): Promise<string> {
+  const res = await fetch(MESHY_TEXT_TO_3D, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      mode: 'preview',
+      prompt,
+      art_style: 'realistic',
+      should_remesh: true,
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Meshy text-to-3D start failed ${res.status}: ${body.slice(0, 200)}`)
+  }
+  const data = await res.json()
+  return data.result as string
+}
+
+async function pollTextTask(id: string, apiKey: string) {
+  const res = await fetch(`${MESHY_TEXT_TO_3D}/${id}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) throw new Error(`Meshy text-to-3D poll failed: ${res.status}`)
+  return res.json()
+}
+
+// ── Shared helpers ───────────────────────────────────────────────────────────
 
 async function fetchGlbAsBase64(glbUrl: string): Promise<string> {
   const glbRes = await fetch(glbUrl)
@@ -142,19 +177,40 @@ export async function POST(req: NextRequest) {
     }
 
     const deadline = Date.now() + TIMEOUT_MS
-
-    // Step 1: Enhance prompt with Claude
     const enhanced = await enhancePrompt(prompt.trim())
 
-    // Step 2: Generate concept image with Gemini
-    const { buffer: imageBuffer, mimeType: imageMimeType } = await generateConceptImage(enhanced)
+    // ── Primary path: Gemini image → Meshy image-to-3D ──────────────────────
+    try {
+      const { buffer: imageBuffer, mimeType: imageMimeType } = await generateConceptImage(enhanced)
+      const taskId = await startImageTo3DTask(imageBuffer, imageMimeType, apiKey)
 
-    // Step 3: Submit to Meshy image-to-3D and poll
-    const taskId = await startImageTo3DTask(imageBuffer, imageMimeType, apiKey)
+      while (Date.now() < deadline) {
+        await sleep(POLL_MS)
+        const task = await pollImageTask(taskId, apiKey)
+
+        if (task.status === 'SUCCEEDED') {
+          const glbUrl = task.model_urls?.glb
+          if (!glbUrl) throw new Error('image-to-3D succeeded but GLB URL is missing')
+          const model_data = await fetchGlbAsBase64(glbUrl)
+          return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
+        }
+
+        if (task.status === 'FAILED' || task.status === 'EXPIRED') {
+          throw new Error(`image-to-3D task ${task.status}: ${task.task_error?.message ?? ''}`)
+        }
+      }
+
+      throw new Error('image-to-3D timed out')
+    } catch (geminiError: any) {
+      console.error('Primary path failed, falling back to text-to-3D:', geminiError?.message)
+    }
+
+    // ── Fallback: Meshy text-to-3D with enhanced prompt ─────────────────────
+    const taskId = await startTextTo3DTask(enhanced, apiKey)
 
     while (Date.now() < deadline) {
       await sleep(POLL_MS)
-      const task = await pollTask(taskId, apiKey)
+      const task = await pollTextTask(taskId, apiKey)
 
       if (task.status === 'SUCCEEDED') {
         const glbUrl = task.model_urls?.glb
