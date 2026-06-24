@@ -442,7 +442,7 @@ export default function ModelViewer({ machineId, modelPath, faultZone, title }: 
       renderer.setSize(w, h)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 
-      // Try GLB first; fall through to procedural on any failure
+      // Try GLB first; fall through to procedural on failure or timeout
       let model: THREE_T.Group | null = null
       if (modelPath) {
         try {
@@ -451,9 +451,15 @@ export default function ModelViewer({ machineId, modelPath, faultZone, title }: 
             if (total > 0 && !cancelled) setProgress(Math.round((loaded / total) * 100))
           }
           const loader = new GLTFLoader()
-          const gltf = await new Promise<{ scene: THREE_T.Group }>((resolve, reject) => {
-            loader.load(modelPath, resolve as any, undefined, reject)
-          })
+          const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('GLB load timeout')), 8000)
+          )
+          const gltf = await Promise.race([
+            new Promise<{ scene: THREE_T.Group }>((resolve, reject) => {
+              loader.load(modelPath, resolve as any, undefined, reject)
+            }),
+            timeout,
+          ])
           THREE.DefaultLoadingManager.onProgress = () => {}
           if (!cancelled) model = gltf.scene
         } catch {

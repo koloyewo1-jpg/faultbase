@@ -8,8 +8,6 @@ const MODEL_PATHS: Record<string, string> = {
   'general-conveyor': '/conveyor.glb',
   'general-motors':   '/motor.glb',
   'general-vfd':      '/panel.glb',
-  'general-plc':      '/panel.glb',
-  'general-safety':   '/panel.glb',
 }
 
 const MACHINES = [
