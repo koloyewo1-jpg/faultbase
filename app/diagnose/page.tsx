@@ -205,10 +205,14 @@ export default function DiagnosePage() {
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px', marginBottom: 16, boxSizing: 'border-box' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Try these examples</div>
             {[
-              'ERROR LED flashing red on CPU',
-              'CPU went to STOP unexpectedly during production',
-              'Wire break alarm on IO-Link port',
-              'All LEDs flashing at the same time',
+              'Belt drifting to one side',
+              'Cylinder not extending on command',
+              'Safety relay not resetting after E-stop',
+              'Motor overload relay tripped',
+              'Heat seal failing — weak or incomplete seal',
+              'Metal detector giving false rejects',
+              'VFD showing fault code on display',
+              'Machine not starting — multiple interlocks',
             ].map((example) => (
               <button
                 key={example}
