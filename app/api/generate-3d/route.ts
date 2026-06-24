@@ -8,8 +8,10 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MESHY_BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d'
 const POLL_MS = 5_000
 const TIMEOUT_MS = 300_000
+// If less than this many ms remain after preview, skip refine and return preview GLB
+const REFINE_TIME_BUDGET_MS = 120_000
 
-async function startTask(prompt: string, apiKey: string): Promise<string> {
+async function startPreviewTask(prompt: string, apiKey: string): Promise<string> {
   const res = await fetch(MESHY_BASE, {
     method: 'POST',
     headers: {
@@ -25,7 +27,27 @@ async function startTask(prompt: string, apiKey: string): Promise<string> {
   })
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`Meshy start failed ${res.status}: ${body.slice(0, 200)}`)
+    throw new Error(`Meshy preview start failed ${res.status}: ${body.slice(0, 200)}`)
+  }
+  const data = await res.json()
+  return data.result as string
+}
+
+async function startRefineTask(previewTaskId: string, apiKey: string): Promise<string> {
+  const res = await fetch(MESHY_BASE, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      mode: 'refine',
+      preview_task_id: previewTaskId,
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Meshy refine start failed ${res.status}: ${body.slice(0, 200)}`)
   }
   const data = await res.json()
   return data.result as string
@@ -37,6 +59,13 @@ async function getTask(id: string, apiKey: string) {
   })
   if (!res.ok) throw new Error(`Meshy poll failed: ${res.status}`)
   return res.json()
+}
+
+async function fetchGlbAsBase64(glbUrl: string): Promise<string> {
+  const glbRes = await fetch(glbUrl)
+  if (!glbRes.ok) throw new Error(`Failed to fetch GLB binary: ${glbRes.status}`)
+  const buffer = await glbRes.arrayBuffer()
+  return Buffer.from(buffer).toString('base64')
 }
 
 function sleep(ms: number) {
@@ -88,35 +117,66 @@ export async function POST(req: NextRequest) {
     }
 
     const enhanced = await enhancePrompt(prompt.trim())
-    const taskId = await startTask(enhanced, apiKey)
     const deadline = Date.now() + TIMEOUT_MS
+
+    // ── Step 1: Preview ──────────────────────────────────────────────────────
+    const previewId = await startPreviewTask(enhanced, apiKey)
+    let previewGlbUrl: string | null = null
 
     while (Date.now() < deadline) {
       await sleep(POLL_MS)
-      const task = await getTask(taskId, apiKey)
+      const task = await getTask(previewId, apiKey)
 
       if (task.status === 'SUCCEEDED') {
-        const glbUrl = task.model_urls?.glb
-        if (!glbUrl) {
-          return NextResponse.json({ error: 'Generation succeeded but GLB URL is missing' }, { status: 500 })
+        previewGlbUrl = task.model_urls?.glb ?? null
+        if (!previewGlbUrl) {
+          return NextResponse.json({ error: 'Preview succeeded but GLB URL is missing' }, { status: 500 })
         }
-        // Fetch GLB server-side so the browser never has to reach Meshy's CDN directly
-        const glbRes = await fetch(glbUrl)
-        if (!glbRes.ok) {
-          return NextResponse.json({ error: `Failed to fetch GLB binary: ${glbRes.status}` }, { status: 502 })
-        }
-        const buffer = await glbRes.arrayBuffer()
-        const model_data = Buffer.from(buffer).toString('base64')
-        return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
+        break
       }
 
       if (task.status === 'FAILED' || task.status === 'EXPIRED') {
         const reason = task.task_error?.message || task.status
-        return NextResponse.json({ error: `Generation failed: ${reason}` }, { status: 500 })
+        return NextResponse.json({ error: `Preview failed: ${reason}` }, { status: 500 })
       }
     }
 
-    return NextResponse.json({ error: 'Generation timed out after 300 seconds' }, { status: 504 })
+    if (!previewGlbUrl) {
+      return NextResponse.json({ error: 'Generation timed out during preview' }, { status: 504 })
+    }
+
+    // ── Step 2: Refine (if enough time remains) ──────────────────────────────
+    const timeLeft = deadline - Date.now()
+    if (timeLeft >= REFINE_TIME_BUDGET_MS) {
+      try {
+        const refineId = await startRefineTask(previewId, apiKey)
+
+        while (Date.now() < deadline) {
+          await sleep(POLL_MS)
+          const task = await getTask(refineId, apiKey)
+
+          if (task.status === 'SUCCEEDED') {
+            const refineGlbUrl = task.model_urls?.glb
+            if (refineGlbUrl) {
+              const model_data = await fetchGlbAsBase64(refineGlbUrl)
+              return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
+            }
+            break // fall through to preview GLB
+          }
+
+          if (task.status === 'FAILED' || task.status === 'EXPIRED') {
+            break // fall through to preview GLB
+          }
+        }
+      } catch {
+        // fall through to preview GLB
+      }
+    }
+
+    // ── Fallback: return preview GLB ─────────────────────────────────────────
+    const model_data = await fetchGlbAsBase64(previewGlbUrl)
+    return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
+
   } catch (error: any) {
     console.error('generate-3d error:', error?.message)
     return NextResponse.json(
