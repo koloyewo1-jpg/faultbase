@@ -272,18 +272,6 @@ export default function DiagnosePage() {
                 </div>
               ))}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-              <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Tools required</div>
-                {result.tools_required?.map((t: string, i: number) => (
-                  <div key={i} style={{ fontSize: 12, color: '#374151', lineHeight: 1.5 }}>• {t}</div>
-                ))}
-              </div>
-              <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Estimated fix time</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>{result.estimated_fix_mins} min</div>
-              </div>
-            </div>
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Escalation guidance</div>
               <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>{result.escalation_guidance}</div>

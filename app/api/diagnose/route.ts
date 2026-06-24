@@ -16,10 +16,11 @@ function searchFaults(machineId: string, input: string) {
     if (fault.machine_id !== machineId) return false
 
     const searchable = [
-      fault.fault_code,
+      fault.id,
       fault.title,
-      fault.description,
+      fault.category,
       fault.meaning,
+      ...(fault.symptoms ?? []),
       ...fault.causes.map((c: any) => c.cause)
     ].join(' ').toLowerCase()
 
@@ -27,7 +28,7 @@ function searchFaults(machineId: string, input: string) {
       .split(/\s+/)
       .filter(w => w.length > 3)
 
-    return fault.fault_code.toLowerCase().includes(input.toLowerCase()) ||
+    return fault.id.toLowerCase().includes(input.toLowerCase()) ||
       words.some(word => searchable.includes(word))
   })
 }
@@ -54,15 +55,15 @@ export async function POST(req: NextRequest) {
 
     const faultContext = matched.map((f: any) => `
 FAULT RECORD
-Code: ${f.fault_code}
+ID: ${f.id}
 Title: ${f.title}
+Category: ${f.category}
 Meaning: ${f.meaning}
+Symptoms: ${JSON.stringify(f.symptoms)}
 Causes: ${JSON.stringify(f.causes)}
-Actions: ${JSON.stringify(f.actions)}
+Checks: ${JSON.stringify(f.checks)}
 Safety: ${JSON.stringify(f.safety_precautions)}
-Tools: ${JSON.stringify(f.tools_required)}
-Fix time: ${f.estimated_fix_mins} minutes
-Escalation: ${f.escalation_guidance}
+Escalation: ${f.escalation}
 `).join('\n---\n')
 
     const response = await anthropic.messages.create({
@@ -76,14 +77,12 @@ STRICT RULES:
 
 Return this exact JSON structure:
 {
-  "fault_code": "string",
+  "fault_id": "string",
   "title": "string",
   "meaning": "string",
   "safety_precautions": ["string"],
   "top_causes": [{"rank": number, "cause": "string", "likelihood": "string"}],
   "actions": [{"step": number, "instruction": "string", "caution": boolean}],
-  "tools_required": ["string"],
-  "estimated_fix_mins": number,
   "escalation_guidance": "string"
 }`,
       messages: [{
