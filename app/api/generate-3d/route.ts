@@ -64,7 +64,14 @@ export async function POST(req: NextRequest) {
         if (!glbUrl) {
           return NextResponse.json({ error: 'Generation succeeded but GLB URL is missing' }, { status: 500 })
         }
-        return NextResponse.json({ model_url: glbUrl })
+        // Fetch GLB server-side so the browser never has to reach Meshy's CDN directly
+        const glbRes = await fetch(glbUrl)
+        if (!glbRes.ok) {
+          return NextResponse.json({ error: `Failed to fetch GLB binary: ${glbRes.status}` }, { status: 502 })
+        }
+        const buffer = await glbRes.arrayBuffer()
+        const model_data = Buffer.from(buffer).toString('base64')
+        return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
       }
 
       if (task.status === 'FAILED' || task.status === 'EXPIRED') {

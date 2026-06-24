@@ -26,11 +26,13 @@ export default function WorldPage() {
   const [meshyProgress, setMeshyProgress] = useState(0)
   const [meshyStatusIdx, setMeshyStatusIdx] = useState(0)
   const [meshyModelUrl, setMeshyModelUrl] = useState<string | null>(null)
+  const [meshyModelReady, setMeshyModelReady] = useState(false)
   const [meshyError, setMeshyError] = useState('')
 
   const meshyCanvasRef = useRef<HTMLCanvasElement>(null)
   const meshyAnimIdRef = useRef(0)
   const meshyRendererRef = useRef<any>(null)
+  const meshyBlobUrlRef = useRef<string | null>(null)
 
   // Progress bar + rotating status messages while loading
   useEffect(() => {
@@ -73,20 +75,15 @@ export default function WorldPage() {
       const h = 440
 
       const scene = new THREE.Scene()
+      scene.background = new THREE.Color(0xf0ede8)
 
       const camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 200)
       camera.position.set(0, 0.5, 4)
 
-      scene.add(new THREE.AmbientLight(0xffffff, 1.5))
-      const sun = new THREE.DirectionalLight(0xffffff, 2.5)
-      sun.position.set(4, 10, 6)
-      scene.add(sun)
-      const fill = new THREE.DirectionalLight(0xddeeff, 1.0)
-      fill.position.set(-6, 2, -4)
-      scene.add(fill)
-      const rim = new THREE.DirectionalLight(0xffffff, 0.6)
-      rim.position.set(0, -4, -6)
-      scene.add(rim)
+      scene.add(new THREE.AmbientLight(0xffffff, 2.0))
+      const dl = new THREE.DirectionalLight(0xffffff, 1.5)
+      dl.position.set(5, 10, 7)
+      scene.add(dl)
 
       const renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true })
       renderer.setSize(w, h)
@@ -100,10 +97,9 @@ export default function WorldPage() {
       controls.autoRotate = true
       controls.autoRotateSpeed = 0.7
 
-      const proxyUrl = `/api/proxy-glb?url=${encodeURIComponent(meshyModelUrl!)}`
       const loader = new GLTFLoader()
       const gltf = await new Promise<any>((resolve, reject) =>
-        loader.load(proxyUrl, resolve, undefined, reject),
+        loader.load(meshyModelUrl!, resolve, undefined, reject),
       )
       if (cancelled) return
 
@@ -120,6 +116,8 @@ export default function WorldPage() {
       camera.lookAt(0, 0, 0)
       controls.target.set(0, 0, 0)
       controls.update()
+
+      if (!cancelled) setMeshyModelReady(true)
 
       const handleResize = () => {
         const newW = cvs.clientWidth || 680
@@ -150,6 +148,7 @@ export default function WorldPage() {
   useEffect(() => () => {
     cancelAnimationFrame(meshyAnimIdRef.current)
     meshyRendererRef.current?.dispose()
+    if (meshyBlobUrlRef.current) URL.revokeObjectURL(meshyBlobUrlRef.current)
   }, [])
 
   async function generateMeshy() {
@@ -157,7 +156,13 @@ export default function WorldPage() {
     setMeshyLoading(true)
     setMeshyError('')
     setMeshyModelUrl(null)
+    setMeshyModelReady(false)
     setMeshyProgress(0)
+    // Revoke previous blob URL to free memory
+    if (meshyBlobUrlRef.current) {
+      URL.revokeObjectURL(meshyBlobUrlRef.current)
+      meshyBlobUrlRef.current = null
+    }
     try {
       const res = await fetch('/api/generate-3d', {
         method: 'POST',
@@ -166,8 +171,15 @@ export default function WorldPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Generation failed')
+      // Convert base64 → Blob URL so GLTFLoader loads from same origin
+      const bytes = atob(data.model_data)
+      const array = new Uint8Array(bytes.length)
+      for (let i = 0; i < bytes.length; i++) array[i] = bytes.charCodeAt(i)
+      const blob = new Blob([array], { type: 'model/gltf-binary' })
+      const objectUrl = URL.createObjectURL(blob)
+      meshyBlobUrlRef.current = objectUrl
       setMeshyProgress(100)
-      setMeshyModelUrl(data.model_url)
+      setMeshyModelUrl(objectUrl)
     } catch (e: any) {
       setMeshyError(e.message || 'Generation failed')
     } finally {
@@ -304,18 +316,37 @@ export default function WorldPage() {
           </div>
         )}
 
-        {/* 3D viewer */}
+        {/* 3D viewer — canvas mounts when URL is ready, reveals after model loads */}
         {meshyModelUrl && (
           <div>
-            <div style={{ background: '#141824', borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
+            <div style={{ background: '#f0ede8', borderRadius: 12, overflow: 'hidden', marginBottom: 8, border: '1px solid #e5e7eb', position: 'relative' }}>
               <canvas
                 ref={meshyCanvasRef}
-                style={{ display: 'block', width: '100%', height: 440, cursor: 'grab' }}
+                style={{
+                  display: 'block', width: '100%', height: 440, cursor: 'grab',
+                  visibility: meshyModelReady ? 'visible' : 'hidden',
+                }}
               />
+              {!meshyModelReady && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  height: 440, gap: 10, color: '#9ca3af', fontSize: 13,
+                  position: 'absolute', inset: 0,
+                }}>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: '50%',
+                    border: '2px solid #e5e7eb', borderTopColor: '#d97706',
+                    animation: 'kspin 1s linear infinite', flexShrink: 0,
+                  }} />
+                  Loading model into viewer…
+                </div>
+              )}
             </div>
-            <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
-              Drag to rotate · Scroll to zoom · Auto-rotating · Generated by Meshy AI
-            </p>
+            {meshyModelReady && (
+              <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+                Drag to rotate · Scroll to zoom · Auto-rotating · Generated by Meshy AI
+              </p>
+            )}
           </div>
         )}
 
