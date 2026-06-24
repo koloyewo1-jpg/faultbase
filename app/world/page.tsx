@@ -2,14 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-const LOADING_STAGES = [
-  'Analysing your description…',
-  'Generating base mesh geometry…',
-  'Refining surface topology…',
-  'Applying photorealistic textures…',
-  'Adding material properties…',
-  'Finalising 3D model…',
-  'Almost there…',
+// Each entry: [startSeconds, label]
+const LOADING_STAGES: [number, string][] = [
+  [0,   'Enhancing your description…'],
+  [20,  'Generating concept image…'],
+  [50,  'Converting image to 3D model…'],
+  [150, 'Applying textures and materials…'],
+  [240, 'Almost ready…'],
 ]
 
 const MESHY_EXAMPLES = [
@@ -41,16 +40,18 @@ export default function WorldPage() {
     setMeshyStatusIdx(0)
     const start = Date.now()
 
-    const progressId = setInterval(() => {
+    const tickId = setInterval(() => {
       const elapsed = (Date.now() - start) / 1000
-      setMeshyProgress(Math.min(2 + (elapsed / 110) * 92, 94))
+      setMeshyProgress(Math.min(2 + (elapsed / 260) * 92, 94))
+      // Find the latest stage whose start time has been reached
+      let idx = 0
+      for (let i = 0; i < LOADING_STAGES.length; i++) {
+        if (elapsed >= LOADING_STAGES[i][0]) idx = i
+      }
+      setMeshyStatusIdx(idx)
     }, 600)
 
-    const stageId = setInterval(() => {
-      setMeshyStatusIdx(i => Math.min(i + 1, LOADING_STAGES.length - 1))
-    }, 15_000)
-
-    return () => { clearInterval(progressId); clearInterval(stageId) }
+    return () => clearInterval(tickId)
   }, [meshyLoading])
 
   // Load GLB into viewer when URL is ready
@@ -309,7 +310,7 @@ export default function WorldPage() {
               }} />
             </div>
             <p style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 4px', minHeight: 24 }}>
-              {LOADING_STAGES[meshyStatusIdx]}
+              {LOADING_STAGES[meshyStatusIdx][1]}
             </p>
             <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 24px' }}>
               This typically takes 60–90 seconds
