@@ -23,6 +23,7 @@ Rules:
 - Include key identifying visual features that make it recognisable
 - Keep under 200 characters
 - Return only the enhanced prompt, nothing else
+- Always describe the object as if photographed on a white background from a 45-degree angle. Be very specific about the dominant shape. For sensors always specify: cylindrical or rectangular body, specify the connector type, specify any LED indicators, specify the cable or connector exit point.
 
 Examples:
 'inductive sensor' → 'Cylindrical inductive proximity sensor, M18 chrome metal barrel, flat sensing face, M12 connector plug on rear, LED indicator ring, industrial metallic finish'

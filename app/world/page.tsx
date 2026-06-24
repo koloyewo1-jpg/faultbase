@@ -121,10 +121,20 @@ export default function WorldPage() {
       model.scale.setScalar(2.8 / maxDim)
 
       // Preview GLBs have no textures — apply grey Phong so geometry is visible.
-      // Refine GLBs have real PBR textures — keep their original materials.
+      // Refine GLBs have real PBR textures — keep their original materials but fix artefacts.
       if (!meshyIsRefineRef.current) {
         const phong = new THREE.MeshPhongMaterial({ color: 0xc8c6be, specular: 0x444444, shininess: 30 })
         model.traverse((obj: any) => { if (obj.isMesh) obj.material = phong })
+      } else {
+        model.traverse((obj: any) => {
+          if (obj.isMesh && obj.material) {
+            obj.material.side = THREE.FrontSide
+            if (obj.material.metalness > 0.9) {
+              obj.material.metalness = 0.7
+              obj.material.roughness = 0.3
+            }
+          }
+        })
       }
 
       scene.add(model)
