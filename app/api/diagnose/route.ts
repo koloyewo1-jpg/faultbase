@@ -10,27 +10,37 @@ import knowledgeBase from '../../../data/knowledge-base.json'
 
 function searchFaults(machineId: string, input: string) {
   const kb = knowledgeBase as any
+  const inputLower = input.toLowerCase()
+  const words = inputLower.split(/\s+/).filter(w => w.length > 3)
 
-  return kb.faults.filter((fault: any) => {
-    if (fault.status !== 'approved') return false
-    if (fault.machine_id !== machineId) return false
+  type ScoredFault = { fault: any; score: number }
 
-    const searchable = [
-      fault.id,
-      fault.title,
-      fault.category,
-      fault.meaning,
-      ...(fault.symptoms ?? []),
-      ...fault.causes.map((c: any) => c.cause)
-    ].join(' ').toLowerCase()
+  const scored: ScoredFault[] = kb.faults
+    .filter((fault: any) => fault.status === 'approved')
+    .map((fault: any) => {
+      const searchable = [
+        fault.id,
+        fault.title,
+        fault.category,
+        fault.meaning,
+        ...(fault.symptoms ?? []),
+        ...fault.causes.map((c: any) => c.cause)
+      ].join(' ').toLowerCase()
 
-    const words = input.toLowerCase()
-      .split(/\s+/)
-      .filter(w => w.length > 3)
+      const idMatch = fault.id.toLowerCase().includes(inputLower)
+      const wordMatches = words.filter(w => searchable.includes(w)).length
+      if (!idMatch && wordMatches === 0) return null
 
-    return fault.id.toLowerCase().includes(input.toLowerCase()) ||
-      words.some(word => searchable.includes(word))
-  })
+      // machine_id match adds a bonus so same-category results rank higher
+      const machineBonus = fault.machine_id === machineId ? 10 : 0
+      const score = (idMatch ? 20 : 0) + wordMatches + machineBonus
+
+      return { fault, score }
+    })
+    .filter(Boolean) as ScoredFault[]
+
+  scored.sort((a, b) => b.score - a.score)
+  return scored.slice(0, 3).map(s => s.fault)
 }
 
 export async function POST(req: NextRequest) {
