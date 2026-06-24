@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 300
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const MESHY_BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d'
 const POLL_MS = 5_000
@@ -40,6 +43,21 @@ function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
+async function enhancePrompt(userPrompt: string): Promise<string> {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 120,
+      system: 'You are a 3D model prompt engineer. Take the user\'s industrial component description and enhance it to be more specific for 3D generation. Add material descriptions, key visual features, and style. Keep it under 200 characters. Return only the enhanced prompt, nothing else.',
+      messages: [{ role: 'user', content: userPrompt }],
+    })
+    const text = res.content[0].type === 'text' ? res.content[0].text.trim() : ''
+    return text || userPrompt
+  } catch {
+    return userPrompt
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { prompt } = await req.json()
@@ -52,7 +70,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Meshy API key not configured' }, { status: 503 })
     }
 
-    const taskId = await startTask(prompt.trim(), apiKey)
+    const enhanced = await enhancePrompt(prompt.trim())
+    const taskId = await startTask(enhanced, apiKey)
     const deadline = Date.now() + TIMEOUT_MS
 
     while (Date.now() < deadline) {

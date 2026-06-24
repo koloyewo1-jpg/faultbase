@@ -80,10 +80,16 @@ export default function WorldPage() {
       const camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 200)
       camera.position.set(0, 0.5, 4)
 
-      scene.add(new THREE.AmbientLight(0xffffff, 2.0))
-      const dl = new THREE.DirectionalLight(0xffffff, 1.5)
-      dl.position.set(5, 10, 7)
-      scene.add(dl)
+      scene.add(new THREE.AmbientLight(0xffffff, 3.0))
+      const dl1 = new THREE.DirectionalLight(0xffffff, 2.0)
+      dl1.position.set(5, 10, 7)
+      scene.add(dl1)
+      const dl2 = new THREE.DirectionalLight(0xffffff, 1.0)
+      dl2.position.set(-5, 5, -5)
+      scene.add(dl2)
+      const dl3 = new THREE.DirectionalLight(0xffffff, 0.8)
+      dl3.position.set(0, -5, 0)
+      scene.add(dl3)
 
       const renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true })
       renderer.setSize(w, h)
@@ -110,6 +116,13 @@ export default function WorldPage() {
       const maxDim = Math.max(size3.x, size3.y, size3.z)
       model.position.sub(center)
       model.scale.setScalar(2.8 / maxDim)
+
+      // Override dark default materials with a clean Phong grey so geometry is visible
+      const phong = new THREE.MeshPhongMaterial({ color: 0xc8c6be, specular: 0x444444, shininess: 30 })
+      model.traverse((obj: any) => {
+        if (obj.isMesh) obj.material = phong
+      })
+
       scene.add(model)
 
       camera.position.set(0, 0, 3.6)
