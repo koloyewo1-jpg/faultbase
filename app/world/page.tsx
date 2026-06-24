@@ -363,6 +363,12 @@ export default function WorldPage() {
   const [autoRotating, setAutoRotating] = useState(false)
   const [totalPlaced, setTotalPlaced] = useState(0)
 
+  const [meshyPrompt, setMeshyPrompt] = useState('')
+  const [meshyLoading, setMeshyLoading] = useState(false)
+  const [meshyProgress, setMeshyProgress] = useState(0)
+  const [meshyModelUrl, setMeshyModelUrl] = useState<string | null>(null)
+  const [meshyError, setMeshyError] = useState('')
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const threeRef = useRef<{
     THREE: any; scene: any; camera: any
@@ -370,6 +376,9 @@ export default function WorldPage() {
   } | null>(null)
   const animIdRef = useRef(0)
   const resizeCleanupRef = useRef<(() => void) | undefined>(undefined)
+  const meshyCanvasRef = useRef<HTMLCanvasElement>(null)
+  const meshyAnimIdRef = useRef(0)
+  const meshyRendererRef = useRef<any>(null)
 
   // Initialise Three.js scene once on mount
   useEffect(() => {
@@ -493,6 +502,106 @@ export default function WorldPage() {
     controls.update()
   }, [machines])
 
+  // Animate progress bar while Meshy is generating
+  useEffect(() => {
+    if (!meshyLoading) return
+    setMeshyProgress(2)
+    const start = Date.now()
+    const id = setInterval(() => {
+      const elapsed = (Date.now() - start) / 1000
+      setMeshyProgress(Math.min(2 + (elapsed / 90) * 92, 94))
+    }, 600)
+    return () => clearInterval(id)
+  }, [meshyLoading])
+
+  // Load GLB into the Meshy viewer canvas when model URL is ready
+  useEffect(() => {
+    if (!meshyModelUrl) return
+    const canvas = meshyCanvasRef.current
+    if (!canvas) return
+    let cancelled = false
+
+    if (meshyRendererRef.current) { meshyRendererRef.current.dispose(); meshyRendererRef.current = null }
+    cancelAnimationFrame(meshyAnimIdRef.current)
+
+    async function loadGLB(cvs: HTMLCanvasElement) {
+      const THREE = threeRef.current?.THREE || await import('three')
+      // @ts-ignore – not in exports map, resolves at runtime
+      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader')
+      // @ts-ignore
+      const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls')
+      if (cancelled) return
+
+      const w = cvs.clientWidth || 600
+      const h = 380
+
+      const scene = new THREE.Scene()
+      scene.background = new THREE.Color(0x141824)
+
+      const camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 200)
+      camera.position.set(0, 0.5, 4)
+
+      scene.add(new THREE.AmbientLight(0xffffff, 2.2))
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x8090a0, 1.0))
+      const sun = new THREE.DirectionalLight(0xffffff, 2.0)
+      sun.position.set(5, 8, 5)
+      scene.add(sun)
+      const fill = new THREE.DirectionalLight(0xaabbcc, 1.2)
+      fill.position.set(-5, -3, -5)
+      scene.add(fill)
+
+      const renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true })
+      renderer.setSize(w, h)
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      meshyRendererRef.current = renderer
+
+      const controls = new OrbitControls(camera, renderer.domElement)
+      controls.enableDamping = true
+      controls.dampingFactor = 0.07
+      controls.autoRotate = true
+      controls.autoRotateSpeed = 0.7
+
+      const loader = new GLTFLoader()
+      const gltf = await new Promise<any>((resolve, reject) =>
+        loader.load(meshyModelUrl!, resolve, undefined, reject)
+      )
+      if (cancelled) return
+
+      const model = gltf.scene
+      const box3 = new THREE.Box3().setFromObject(model)
+      const center = box3.getCenter(new THREE.Vector3())
+      const size3 = box3.getSize(new THREE.Vector3())
+      const maxDim = Math.max(size3.x, size3.y, size3.z)
+      model.position.sub(center)
+      model.scale.setScalar(2.8 / maxDim)
+      scene.add(model)
+
+      camera.position.set(0, 0, 3.6)
+      camera.lookAt(0, 0, 0)
+      controls.target.set(0, 0, 0)
+      controls.update()
+
+      function animate() {
+        meshyAnimIdRef.current = requestAnimationFrame(animate)
+        controls.update()
+        renderer.render(scene, camera)
+      }
+      animate()
+    }
+
+    loadGLB(canvas).catch(err => {
+      if (!cancelled) setMeshyError('Failed to display model: ' + (err?.message || 'unknown error'))
+    })
+
+    return () => { cancelled = true; cancelAnimationFrame(meshyAnimIdRef.current) }
+  }, [meshyModelUrl])
+
+  // Cleanup Meshy renderer on unmount
+  useEffect(() => () => {
+    cancelAnimationFrame(meshyAnimIdRef.current)
+    meshyRendererRef.current?.dispose()
+  }, [])
+
   async function generate() {
     if (!prompt.trim()) return
     setLoading(true)
@@ -539,6 +648,29 @@ export default function WorldPage() {
     if (!s) return
     s.controls.autoRotate = !s.controls.autoRotate
     setAutoRotating(s.controls.autoRotate)
+  }
+
+  async function generateMeshy() {
+    if (!meshyPrompt.trim()) return
+    setMeshyLoading(true)
+    setMeshyError('')
+    setMeshyModelUrl(null)
+    setMeshyProgress(0)
+    try {
+      const res = await fetch('/api/generate-3d', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: meshyPrompt }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      setMeshyProgress(100)
+      setMeshyModelUrl(data.model_url)
+    } catch (e: any) {
+      setMeshyError(e.message || 'Generation failed')
+    } finally {
+      setMeshyLoading(false)
+    }
   }
 
   const btnStyle = (active = false): React.CSSProperties => ({
@@ -712,8 +844,134 @@ export default function WorldPage() {
         </div>
 
         <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0, lineHeight: 1.6 }}>
-          Schematic 3D layout only — not to scale. Full CAD-quality models and plant flow simulation coming soon.
+          Schematic 3D layout only — not to scale.
         </p>
+
+        {/* ── Divider ─────────────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '40px 0 34px' }}>
+          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+          <span style={{ fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+            — or generate a single component —
+          </span>
+          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+        </div>
+
+        {/* ── Single component generator ──────────────────────────────────── */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 11, fontWeight: 600, color: '#78350f',
+            background: '#fef3c7', borderRadius: 20, padding: '4px 14px', marginBottom: 10,
+          }}>
+            Powered by Meshy AI · Photorealistic 3D
+          </div>
+          <h2 style={{ fontSize: 'clamp(17px, 3vw, 22px)', fontWeight: 700, margin: '0 0 6px', color: '#111827' }}>
+            Single component generator
+          </h2>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: 0, maxWidth: 520, lineHeight: 1.6 }}>
+            Describe any industrial machine or component. Meshy AI generates a photorealistic
+            3D model in about 60 seconds.
+          </p>
+        </div>
+
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '18px 18px 14px', marginBottom: 10 }}>
+          <input
+            value={meshyPrompt}
+            onChange={e => setMeshyPrompt(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') generateMeshy() }}
+            placeholder="e.g. Siemens S7-1200 PLC with 4 IO modules..."
+            style={{
+              width: '100%', padding: '10px 12px', fontSize: 14,
+              border: '1px solid #d1d5db', borderRadius: 8,
+              fontFamily: 'inherit', color: '#111827', lineHeight: 1.6,
+              boxSizing: 'border-box', outline: 'none', background: '#fafafa',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={generateMeshy}
+              disabled={meshyLoading || !meshyPrompt.trim()}
+              style={{
+                padding: '10px 22px', fontSize: 14, fontWeight: 600,
+                background: meshyLoading || !meshyPrompt.trim() ? '#94a3b8' : '#d97706',
+                color: '#fff', border: 'none', borderRadius: 8,
+                cursor: meshyLoading || !meshyPrompt.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {meshyLoading ? 'Generating…' : 'Generate 3D'}
+            </button>
+            {meshyError && <span style={{ fontSize: 13, color: '#dc2626' }}>{meshyError}</span>}
+          </div>
+        </div>
+
+        {/* Meshy example prompts */}
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 24, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#9ca3af', flexShrink: 0 }}>Try:</span>
+          {[
+            'Siemens S7-1200 PLC with 4 IO modules',
+            'Industrial pneumatic cylinder double acting 50mm bore',
+            'Three phase electric motor with cooling fins and junction box',
+            'Conveyor belt with drive motor and tracking rollers',
+            'Safety relay module on DIN rail',
+          ].map(ex => (
+            <button
+              key={ex}
+              onClick={() => setMeshyPrompt(ex)}
+              style={{
+                padding: '5px 12px', fontSize: 12, background: '#fff',
+                border: '1px solid #d1d5db', borderRadius: 20, cursor: 'pointer', color: '#374151',
+              }}
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+
+        {/* Generation progress */}
+        {meshyLoading && (
+          <div style={{
+            background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12,
+            padding: '20px 22px', marginBottom: 16,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
+                Generating 3D model…
+              </span>
+              <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                {Math.round(meshyProgress)}%
+              </span>
+            </div>
+            <div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
+              <div style={{
+                width: `${meshyProgress}%`, height: '100%',
+                background: 'linear-gradient(90deg, #d97706, #fbbf24)',
+                borderRadius: 3, transition: 'width 0.6s ease',
+              }} />
+            </div>
+            <p style={{ fontSize: 12, color: '#6b7280', margin: 0, lineHeight: 1.5 }}>
+              {meshyProgress < 20 ? 'Starting generation…'
+                : meshyProgress < 50 ? 'Processing mesh geometry…'
+                : meshyProgress < 80 ? 'Generating photorealistic textures…'
+                : 'Finalising model…'}{' '}
+              This typically takes 60–90 seconds.
+            </p>
+          </div>
+        )}
+
+        {/* GLB viewer */}
+        {meshyModelUrl && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ background: '#141824', borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
+              <canvas
+                ref={meshyCanvasRef}
+                style={{ display: 'block', width: '100%', height: 380, cursor: 'grab' }}
+              />
+            </div>
+            <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+              Drag to rotate · Scroll to zoom · Generated by Meshy AI
+            </p>
+          </div>
+        )}
 
       </div>
 
