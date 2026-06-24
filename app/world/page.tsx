@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-// Each entry: [startSeconds, label]
+// Each entry: [startSeconds, label] — covers the server-side preview phase (~90s)
 const LOADING_STAGES: [number, string][] = [
-  [0,   'Building geometry…'],
-  [85,  'Applying textures…'],
-  [170, 'Almost ready…'],
+  [0,  'Building geometry…'],
+  [75, 'Almost ready…'],
 ]
 
 const MESHY_EXAMPLES = [
@@ -24,12 +23,17 @@ export default function WorldPage() {
   const [meshyStatusIdx, setMeshyStatusIdx] = useState(0)
   const [meshyModelUrl, setMeshyModelUrl] = useState<string | null>(null)
   const [meshyModelReady, setMeshyModelReady] = useState(false)
+  const [meshyUpgrading, setMeshyUpgrading] = useState(false)
   const [meshyError, setMeshyError] = useState('')
 
   const meshyCanvasRef = useRef<HTMLCanvasElement>(null)
   const meshyAnimIdRef = useRef(0)
   const meshyRendererRef = useRef<any>(null)
   const meshyBlobUrlRef = useRef<string | null>(null)
+  // true while loading the refine GLB — skips grey Phong override so real textures show
+  const meshyIsRefineRef = useRef(false)
+  // increments on each new generation to cancel stale polling
+  const meshyGenIdRef = useRef(0)
 
   // Progress bar + rotating status messages while loading
   useEffect(() => {
@@ -116,11 +120,12 @@ export default function WorldPage() {
       model.position.sub(center)
       model.scale.setScalar(2.8 / maxDim)
 
-      // Override dark default materials with a clean Phong grey so geometry is visible
-      const phong = new THREE.MeshPhongMaterial({ color: 0xc8c6be, specular: 0x444444, shininess: 30 })
-      model.traverse((obj: any) => {
-        if (obj.isMesh) obj.material = phong
-      })
+      // Preview GLBs have no textures — apply grey Phong so geometry is visible.
+      // Refine GLBs have real PBR textures — keep their original materials.
+      if (!meshyIsRefineRef.current) {
+        const phong = new THREE.MeshPhongMaterial({ color: 0xc8c6be, specular: 0x444444, shininess: 30 })
+        model.traverse((obj: any) => { if (obj.isMesh) obj.material = phong })
+      }
 
       scene.add(model)
 
@@ -165,17 +170,25 @@ export default function WorldPage() {
 
   async function generateMeshy() {
     if (!meshyPrompt.trim()) return
+
+    // Increment generation ID — any in-flight polling from a prior call will detect
+    // the mismatch and stop without updating state.
+    const genId = ++meshyGenIdRef.current
+
     setMeshyLoading(true)
+    setMeshyUpgrading(false)
     setMeshyError('')
     setMeshyModelUrl(null)
     setMeshyModelReady(false)
     setMeshyProgress(0)
+    meshyIsRefineRef.current = false
     if (meshyBlobUrlRef.current) {
       URL.revokeObjectURL(meshyBlobUrlRef.current)
       meshyBlobUrlRef.current = null
     }
+
     try {
-      // Step 1: Start job — server runs Claude enhance + preview poll + starts refine
+      // Phase 1: Server handles Claude enhance + preview poll + refine start (~90s)
       const startRes = await fetch('/api/generate-3d', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -183,49 +196,73 @@ export default function WorldPage() {
       })
       const startData = await startRes.json()
       if (!startRes.ok) throw new Error(startData.error || 'Generation failed')
-      const { refine_task_id } = startData
+      if (meshyGenIdRef.current !== genId) return
 
-      // Step 2: Browser polls refine until SUCCEEDED (up to 3 min)
-      const pollDeadline = Date.now() + 180_000
-      await new Promise<void>((resolve, reject) => {
-        const poll = async () => {
-          if (Date.now() > pollDeadline) {
-            reject(new Error('Refine timed out — please try again'))
-            return
-          }
-          try {
-            const pollRes = await fetch(`/api/poll-3d?task_id=${refine_task_id}`)
-            const pollData = await pollRes.json()
-            if (!pollRes.ok) throw new Error(pollData.error || 'Poll failed')
+      const { preview_glb, refine_task_id } = startData
 
-            if (pollData.status === 'SUCCEEDED') {
-              const glbUrl = pollData.model_urls?.glb
-              if (!glbUrl) throw new Error('No GLB URL in response')
-              // Fetch GLB server-side to avoid CORS
-              const glbRes = await fetch(`/api/proxy-glb?url=${encodeURIComponent(glbUrl)}`)
-              if (!glbRes.ok) throw new Error(`Failed to fetch GLB: ${glbRes.status}`)
-              const arrayBuffer = await glbRes.arrayBuffer()
-              const blob = new Blob([arrayBuffer], { type: 'model/gltf-binary' })
-              const objectUrl = URL.createObjectURL(blob)
-              meshyBlobUrlRef.current = objectUrl
-              setMeshyProgress(100)
-              setMeshyModelUrl(objectUrl)
-              resolve()
-            } else if (pollData.status === 'FAILED' || pollData.status === 'EXPIRED') {
-              reject(new Error(`Refine ${pollData.status.toLowerCase()}`))
-            } else {
-              setTimeout(poll, 5_000)
-            }
-          } catch (e) {
-            reject(e)
-          }
-        }
-        setTimeout(poll, 5_000)
-      })
-    } catch (e: any) {
-      setMeshyError(e.message || 'Generation failed')
-    } finally {
+      // Display the preview GLB immediately (grey geometry, correct shape)
+      const previewBytes = atob(preview_glb)
+      const previewArray = new Uint8Array(previewBytes.length)
+      for (let i = 0; i < previewBytes.length; i++) previewArray[i] = previewBytes.charCodeAt(i)
+      const previewBlob = new Blob([previewArray], { type: 'model/gltf-binary' })
+      const previewUrl = URL.createObjectURL(previewBlob)
+      meshyBlobUrlRef.current = previewUrl
+      meshyIsRefineRef.current = false
+      setMeshyProgress(100)
+      setMeshyModelUrl(previewUrl)
       setMeshyLoading(false)
+      setMeshyUpgrading(true)
+
+      // Phase 2: Browser polls refine until SUCCEEDED (up to 3 min)
+      const pollDeadline = Date.now() + 180_000
+      const poll = async (): Promise<void> => {
+        if (meshyGenIdRef.current !== genId) return
+        if (Date.now() > pollDeadline) {
+          // Timeout — silently keep the preview model, hide the banner
+          setMeshyUpgrading(false)
+          return
+        }
+        try {
+          const pollRes = await fetch(`/api/poll-3d?task_id=${refine_task_id}`)
+          const pollData = await pollRes.json()
+
+          if (pollData.status === 'SUCCEEDED') {
+            if (meshyGenIdRef.current !== genId) return
+            const glbUrl = pollData.model_urls?.glb
+            if (!glbUrl) { setMeshyUpgrading(false); return }
+
+            // Fetch refine GLB via proxy to avoid CORS
+            const glbRes = await fetch(`/api/proxy-glb?url=${encodeURIComponent(glbUrl)}`)
+            if (!glbRes.ok) { setMeshyUpgrading(false); return }
+
+            const arrayBuffer = await glbRes.arrayBuffer()
+            const refineBlob = new Blob([arrayBuffer], { type: 'model/gltf-binary' })
+            const refineUrl = URL.createObjectURL(refineBlob)
+
+            // Revoke preview blob, swap in refine model
+            if (meshyBlobUrlRef.current) URL.revokeObjectURL(meshyBlobUrlRef.current)
+            meshyBlobUrlRef.current = refineUrl
+            meshyIsRefineRef.current = true
+            setMeshyModelUrl(refineUrl)
+            setMeshyUpgrading(false)
+          } else if (pollData.status === 'FAILED' || pollData.status === 'EXPIRED') {
+            // Silently keep the preview model, hide the banner
+            setMeshyUpgrading(false)
+          } else {
+            setTimeout(poll, 5_000)
+          }
+        } catch {
+          setTimeout(poll, 5_000)
+        }
+      }
+      setTimeout(poll, 5_000)
+
+    } catch (e: any) {
+      if (meshyGenIdRef.current === genId) {
+        setMeshyError(e.message || 'Generation failed')
+        setMeshyLoading(false)
+        setMeshyUpgrading(false)
+      }
     }
   }
 
@@ -384,7 +421,20 @@ export default function WorldPage() {
                 </div>
               )}
             </div>
-            {meshyModelReady && (
+            {meshyModelReady && meshyUpgrading && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 8, padding: '8px 0', fontSize: 13, color: '#d97706',
+              }}>
+                <div style={{
+                  width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                  border: '2px solid #fde68a', borderTopColor: '#d97706',
+                  animation: 'kspin 1s linear infinite',
+                }} />
+                Upgrading to textured model…
+              </div>
+            )}
+            {meshyModelReady && !meshyUpgrading && (
               <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
                 Drag to rotate · Scroll to zoom · Auto-rotating · Powered by Kolatron.ai
               </p>
