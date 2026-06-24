@@ -181,8 +181,6 @@ export default function WorldPage() {
   async function generateMeshy() {
     if (!meshyPrompt.trim()) return
 
-    // Increment generation ID — any in-flight polling from a prior call will detect
-    // the mismatch and stop without updating state.
     const genId = ++meshyGenIdRef.current
 
     setMeshyLoading(true)
@@ -197,8 +195,39 @@ export default function WorldPage() {
       meshyBlobUrlRef.current = null
     }
 
+    // Helper: sleep
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+    // Helper: poll a task until SUCCEEDED, return model_urls.glb
+    const pollTask = async (taskId: string, timeoutMs = 180_000): Promise<string> => {
+      const deadline = Date.now() + timeoutMs
+      while (true) {
+        await sleep(5_000)
+        if (meshyGenIdRef.current !== genId) throw new Error('cancelled')
+        if (Date.now() > deadline) throw new Error('Timed out — please try again')
+        const res = await fetch(`/api/poll-3d?task_id=${taskId}`)
+        const data = await res.json()
+        if (data.status === 'SUCCEEDED') {
+          const url: string | undefined = data.model_urls?.glb
+          if (!url) throw new Error('No GLB URL in response')
+          return url
+        }
+        if (data.status === 'FAILED' || data.status === 'EXPIRED') {
+          throw new Error(`Generation ${data.status.toLowerCase()}`)
+        }
+      }
+    }
+
+    // Helper: fetch a GLB via the server proxy and return a blob URL
+    const fetchGlb = async (glbUrl: string): Promise<string> => {
+      const res = await fetch(`/api/proxy-glb?url=${encodeURIComponent(glbUrl)}`)
+      if (!res.ok) throw new Error(`Failed to fetch GLB: ${res.status}`)
+      const buf = await res.arrayBuffer()
+      return URL.createObjectURL(new Blob([buf], { type: 'model/gltf-binary' }))
+    }
+
     try {
-      // Phase 1: Server handles Claude enhance + preview poll + refine start (~90s)
+      // Phase 1: Enhance prompt + start preview (fast, no polling server-side)
       const startRes = await fetch('/api/generate-3d', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -207,68 +236,55 @@ export default function WorldPage() {
       const startData = await startRes.json()
       if (!startRes.ok) throw new Error(startData.error || 'Generation failed')
       if (meshyGenIdRef.current !== genId) return
+      const { preview_task_id } = startData
 
-      const { preview_glb, refine_task_id } = startData
+      // Phase 2: Browser polls preview
+      const previewGlbUrl = await pollTask(preview_task_id, 150_000)
+      if (meshyGenIdRef.current !== genId) return
 
-      // Display the preview GLB immediately (grey geometry, correct shape)
-      const previewBytes = atob(preview_glb)
-      const previewArray = new Uint8Array(previewBytes.length)
-      for (let i = 0; i < previewBytes.length; i++) previewArray[i] = previewBytes.charCodeAt(i)
-      const previewBlob = new Blob([previewArray], { type: 'model/gltf-binary' })
-      const previewUrl = URL.createObjectURL(previewBlob)
-      meshyBlobUrlRef.current = previewUrl
+      // Phase 3: Show preview model immediately
+      const previewBlobUrl = await fetchGlb(previewGlbUrl)
+      if (meshyGenIdRef.current !== genId) { URL.revokeObjectURL(previewBlobUrl); return }
+      meshyBlobUrlRef.current = previewBlobUrl
       meshyIsRefineRef.current = false
+      setMeshyModelUrl(previewBlobUrl)
       setMeshyProgress(100)
-      setMeshyModelUrl(previewUrl)
       setMeshyLoading(false)
       setMeshyUpgrading(true)
 
-      // Phase 2: Browser polls refine until SUCCEEDED (up to 3 min)
-      const pollDeadline = Date.now() + 180_000
-      const poll = async (): Promise<void> => {
-        if (meshyGenIdRef.current !== genId) return
-        if (Date.now() > pollDeadline) {
-          // Timeout — silently keep the preview model, hide the banner
-          setMeshyUpgrading(false)
-          return
-        }
-        try {
-          const pollRes = await fetch(`/api/poll-3d?task_id=${refine_task_id}`)
-          const pollData = await pollRes.json()
+      // Phase 4: Start refine task
+      const refineRes = await fetch('/api/start-refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview_task_id }),
+      })
+      const refineData = await refineRes.json()
+      if (meshyGenIdRef.current !== genId) return
+      if (!refineRes.ok) { setMeshyUpgrading(false); return } // silently keep preview
+      const { refine_task_id } = refineData
 
-          if (pollData.status === 'SUCCEEDED') {
-            if (meshyGenIdRef.current !== genId) return
-            const glbUrl = pollData.model_urls?.glb
-            if (!glbUrl) { setMeshyUpgrading(false); return }
-
-            // Fetch refine GLB via proxy to avoid CORS
-            const glbRes = await fetch(`/api/proxy-glb?url=${encodeURIComponent(glbUrl)}`)
-            if (!glbRes.ok) { setMeshyUpgrading(false); return }
-
-            const arrayBuffer = await glbRes.arrayBuffer()
-            const refineBlob = new Blob([arrayBuffer], { type: 'model/gltf-binary' })
-            const refineUrl = URL.createObjectURL(refineBlob)
-
-            // Revoke preview blob, swap in refine model
-            if (meshyBlobUrlRef.current) URL.revokeObjectURL(meshyBlobUrlRef.current)
-            meshyBlobUrlRef.current = refineUrl
-            meshyIsRefineRef.current = true
-            setMeshyModelUrl(refineUrl)
-            setMeshyUpgrading(false)
-          } else if (pollData.status === 'FAILED' || pollData.status === 'EXPIRED') {
-            // Silently keep the preview model, hide the banner
-            setMeshyUpgrading(false)
-          } else {
-            setTimeout(poll, 5_000)
-          }
-        } catch {
-          setTimeout(poll, 5_000)
-        }
+      // Phase 5: Browser polls refine
+      let refineGlbUrl: string
+      try {
+        refineGlbUrl = await pollTask(refine_task_id, 180_000)
+      } catch {
+        // Silently keep the preview model if refine fails or times out
+        if (meshyGenIdRef.current === genId) setMeshyUpgrading(false)
+        return
       }
-      setTimeout(poll, 5_000)
+      if (meshyGenIdRef.current !== genId) return
+
+      // Phase 6: Swap to textured refine model
+      const refineBlobUrl = await fetchGlb(refineGlbUrl)
+      if (meshyGenIdRef.current !== genId) { URL.revokeObjectURL(refineBlobUrl); return }
+      if (meshyBlobUrlRef.current) URL.revokeObjectURL(meshyBlobUrlRef.current)
+      meshyBlobUrlRef.current = refineBlobUrl
+      meshyIsRefineRef.current = true
+      setMeshyModelUrl(refineBlobUrl)
+      setMeshyUpgrading(false)
 
     } catch (e: any) {
-      if (meshyGenIdRef.current === genId) {
+      if (meshyGenIdRef.current === genId && e.message !== 'cancelled') {
         setMeshyError(e.message || 'Generation failed')
         setMeshyLoading(false)
         setMeshyUpgrading(false)
