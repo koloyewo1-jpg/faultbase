@@ -68,7 +68,7 @@ Escalation: ${f.escalation}
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
+      max_tokens: 2048,
       system: `You are a maintenance support assistant in a GMP manufacturing environment.
 STRICT RULES:
 1. Only use information from the fault records provided. Do not add, invent or infer anything.
