@@ -392,10 +392,14 @@ function buildProcedural(machineId: string, THREE: TM): THREE_T.Group | null {
   }
 }
 
+// GLB files should ideally be compressed to under 2MB using gltf-pipeline or
+// Draco compression for production use.
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ModelViewer({ machineId, modelPath, faultZone, title }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [loading, setLoading] = useState(true)
+  const [progress, setProgress] = useState(0)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -427,11 +431,12 @@ export default function ModelViewer({ machineId, modelPath, faultZone, title }: 
       camera.position.set(0, 0.5, 3.5)
       camera.lookAt(0, 0, 0)
 
-      scene.add(new THREE.AmbientLight(0xffffff, 1.2))
+      scene.add(new THREE.AmbientLight(0xffffff, 2.0))
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xd0d8e0, 1.0))
       const dir = new THREE.DirectionalLight(0xffffff, 1.8)
       dir.position.set(5, 8, 5); scene.add(dir)
-      const fill = new THREE.DirectionalLight(0xffffff, 0.4)
-      fill.position.set(-5, 2, -3); scene.add(fill)
+      const fill = new THREE.DirectionalLight(0xffffff, 1.5)
+      fill.position.set(-5, -2, -5); scene.add(fill)
 
       renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true })
       renderer.setSize(w, h)
@@ -441,12 +446,20 @@ export default function ModelViewer({ machineId, modelPath, faultZone, title }: 
       let model: THREE_T.Group | null = null
       if (modelPath) {
         try {
+          // Track per-file download progress for large GLB files
+          THREE.DefaultLoadingManager.onProgress = (_url, loaded, total) => {
+            if (total > 0 && !cancelled) setProgress(Math.round((loaded / total) * 100))
+          }
           const loader = new GLTFLoader()
           const gltf = await new Promise<{ scene: THREE_T.Group }>((resolve, reject) => {
             loader.load(modelPath, resolve as any, undefined, reject)
           })
+          THREE.DefaultLoadingManager.onProgress = () => {}
           if (!cancelled) model = gltf.scene
-        } catch { /* fall through */ }
+        } catch {
+          THREE.DefaultLoadingManager.onProgress = () => {}
+          // fall through to procedural
+        }
       }
 
       if (cancelled) return
@@ -494,8 +507,11 @@ export default function ModelViewer({ machineId, modelPath, faultZone, title }: 
       </div>
       <div style={{ position: 'relative', height: 350 }}>
         {loading && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: '#f9fafb' }}>
             <div style={{ width: 32, height: 32, border: '3px solid #e5e7eb', borderTop: '3px solid #185FA5', borderRadius: '50%', animation: 'mv-spin 0.8s linear infinite' }} />
+            <div style={{ fontSize: 12, color: '#6b7280', fontFamily: 'system-ui, sans-serif' }}>
+              {modelPath && progress > 0 ? `Loading model... ${progress}%` : 'Loading model...'}
+            </div>
             <style>{`@keyframes mv-spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         )}
