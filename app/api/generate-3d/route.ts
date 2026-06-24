@@ -7,7 +7,7 @@ export const maxDuration = 300
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const MESHY_IMAGE_TO_3D = 'https://api.meshy.ai/openapi/v1/image-to-3d'
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent'
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent'
 const POLL_MS = 5_000
 const TIMEOUT_MS = 300_000
 
