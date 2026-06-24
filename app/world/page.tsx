@@ -73,23 +73,25 @@ export default function WorldPage() {
       const h = 440
 
       const scene = new THREE.Scene()
-      scene.background = new THREE.Color(0x141824)
 
       const camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 200)
       camera.position.set(0, 0.5, 4)
 
-      scene.add(new THREE.AmbientLight(0xffffff, 2.2))
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x8090a0, 1.0))
-      const sun = new THREE.DirectionalLight(0xffffff, 2.0)
-      sun.position.set(5, 8, 5)
+      scene.add(new THREE.AmbientLight(0xffffff, 1.5))
+      const sun = new THREE.DirectionalLight(0xffffff, 2.5)
+      sun.position.set(4, 10, 6)
       scene.add(sun)
-      const fill = new THREE.DirectionalLight(0xaabbcc, 1.2)
-      fill.position.set(-5, -3, -5)
+      const fill = new THREE.DirectionalLight(0xddeeff, 1.0)
+      fill.position.set(-6, 2, -4)
       scene.add(fill)
+      const rim = new THREE.DirectionalLight(0xffffff, 0.6)
+      rim.position.set(0, -4, -6)
+      scene.add(rim)
 
       const renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true })
       renderer.setSize(w, h)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setClearColor(0xf0ede8, 1)
       meshyRendererRef.current = renderer
 
       const controls = new OrbitControls(camera, renderer.domElement)
@@ -98,9 +100,10 @@ export default function WorldPage() {
       controls.autoRotate = true
       controls.autoRotateSpeed = 0.7
 
+      const proxyUrl = `/api/proxy-glb?url=${encodeURIComponent(meshyModelUrl!)}`
       const loader = new GLTFLoader()
       const gltf = await new Promise<any>((resolve, reject) =>
-        loader.load(meshyModelUrl!, resolve, undefined, reject),
+        loader.load(proxyUrl, resolve, undefined, reject),
       )
       if (cancelled) return
 
