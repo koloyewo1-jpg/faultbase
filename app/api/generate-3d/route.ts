@@ -177,19 +177,30 @@ export async function POST(req: NextRequest) {
     }
 
     const deadline = Date.now() + TIMEOUT_MS
+
+    // Step 1: Enhance prompt with Claude
+    console.log('Step 1: Enhancing prompt with Claude...')
     const enhanced = await enhancePrompt(prompt.trim())
+    console.log('Enhanced prompt:', enhanced)
 
     // ── Primary path: Gemini image → Meshy image-to-3D ──────────────────────
     try {
+      console.log('Step 2: Calling Gemini for image...')
       const { buffer: imageBuffer, mimeType: imageMimeType } = await generateConceptImage(enhanced)
+      console.log('Gemini result: success, mimeType:', imageMimeType, 'bytes:', imageBuffer.length)
+
+      console.log('Step 3: Sending to Meshy image-to-3D...')
       const taskId = await startImageTo3DTask(imageBuffer, imageMimeType, apiKey)
+      console.log('Meshy image-to-3D task ID:', taskId)
 
       while (Date.now() < deadline) {
         await sleep(POLL_MS)
         const task = await pollImageTask(taskId, apiKey)
+        console.log('Step 4: Polling Meshy image-to-3D... status:', task.status)
 
         if (task.status === 'SUCCEEDED') {
           const glbUrl = task.model_urls?.glb
+          console.log('Final GLB URL:', glbUrl)
           if (!glbUrl) throw new Error('image-to-3D succeeded but GLB URL is missing')
           const model_data = await fetchGlbAsBase64(glbUrl)
           return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
@@ -202,18 +213,22 @@ export async function POST(req: NextRequest) {
 
       throw new Error('image-to-3D timed out')
     } catch (geminiError: any) {
-      console.error('Primary path failed, falling back to text-to-3D:', geminiError?.message)
+      console.error('Gemini result: failed —', geminiError?.message)
+      console.log('Step 3: Falling back to Meshy text-to-3D...')
     }
 
     // ── Fallback: Meshy text-to-3D with enhanced prompt ─────────────────────
     const taskId = await startTextTo3DTask(enhanced, apiKey)
+    console.log('Meshy text-to-3D task ID:', taskId)
 
     while (Date.now() < deadline) {
       await sleep(POLL_MS)
       const task = await pollTextTask(taskId, apiKey)
+      console.log('Step 4: Polling Meshy text-to-3D... status:', task.status)
 
       if (task.status === 'SUCCEEDED') {
         const glbUrl = task.model_urls?.glb
+        console.log('Final GLB URL:', glbUrl)
         if (!glbUrl) {
           return NextResponse.json({ error: 'Generation succeeded but GLB URL is missing' }, { status: 500 })
         }
