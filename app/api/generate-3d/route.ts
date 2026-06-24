@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const MESHY_BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d'
 const POLL_MS = 3_000
-const TIMEOUT_MS = 120_000
+const TIMEOUT_MS = 180_000
 
 async function startTask(prompt: string, apiKey: string): Promise<string> {
   const res = await fetch(MESHY_BASE, {
