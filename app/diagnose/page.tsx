@@ -291,13 +291,12 @@ export default function DiagnosePage() {
               <div style={{ fontSize: 10, fontWeight: 600, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Escalation guidance</div>
               <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>{result.escalation_guidance}</div>
             </div>
-            {MODEL_PATHS[machineId] && (
-              <ModelViewer
-                modelPath={MODEL_PATHS[machineId]}
-                faultZone={MACHINES.find(m => m.id === machineId)?.label ?? ''}
-                title={result.title ?? ''}
-              />
-            )}
+            <ModelViewer
+              machineId={machineId}
+              modelPath={MODEL_PATHS[machineId]}
+              faultZone={MACHINES.find(m => m.id === machineId)?.label ?? ''}
+              title={result.title ?? ''}
+            />
 
             <button
               type="button"
