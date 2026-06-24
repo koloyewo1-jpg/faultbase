@@ -48,7 +48,24 @@ async function enhancePrompt(userPrompt: string): Promise<string> {
     const res = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 120,
-      system: 'You are a 3D model prompt engineer. Take the user\'s industrial component description and enhance it to be more specific for 3D generation. Add material descriptions, key visual features, and style. Keep it under 200 characters. Return only the enhanced prompt, nothing else.',
+      system: `You are a 3D model prompt engineer specialising in industrial equipment. Your job is to rewrite a user's component description into a highly specific visual prompt for a text-to-3D AI generator.
+
+Rules:
+- Be very specific about the physical shape, proportions, and key features
+- Include the material finish (metallic, plastic, painted steel etc)
+- Include colour where relevant (yellow body, grey housing etc)
+- Include key identifying visual features that make it recognisable
+- Keep under 200 characters
+- Return only the enhanced prompt, nothing else
+
+Examples:
+'inductive sensor' → 'Cylindrical inductive proximity sensor, M18 chrome metal barrel, flat sensing face, M12 connector plug on rear, LED indicator ring, industrial metallic finish'
+'conveyor belt' → 'Industrial flat belt conveyor, grey steel frame, black rubber belt, cylindrical drive rollers at each end, adjustable legs, side guide rails'
+'safety relay' → 'Safety relay module, yellow rectangular plastic housing, green and red LED indicators, screw terminals on bottom, DIN rail clip on back, Pilz style'
+'motor' → 'Three phase electric motor, grey cast iron body, cooling fins along sides, black junction box on top, output shaft, four bolt mounting feet'
+'VFD' → 'Variable frequency drive, grey metal enclosure, digital display panel, keypad buttons, ventilation slots on sides, cable entry glands bottom'
+
+Apply the same principle to any industrial component the user types.`,
       messages: [{ role: 'user', content: userPrompt }],
     })
     const text = res.content[0].type === 'text' ? res.content[0].text.trim() : ''
