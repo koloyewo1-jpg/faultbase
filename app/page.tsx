@@ -22,6 +22,8 @@ export default function HomePage() {
           <a href="#how" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>How it works</a>
           <a href="#features" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>Features</a>
           <a href="#security" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>Security</a>
+          <div style={{ height: 14, width: 1, background: '#e5e7eb' }} />
+          <Link href="/world" style={{ fontSize: 13, color: '#185FA5', textDecoration: 'none', fontWeight: 500 }}>World</Link>
         </div>
         <Link href="/diagnose" style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: '#185FA5', color: '#fff', borderRadius: 8, textDecoration: 'none', whiteSpace: 'nowrap' }}>
           Try demo →
