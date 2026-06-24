@@ -15,9 +15,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'invalid url' }, { status: 400 })
   }
 
-  // Only proxy from Meshy's CDN domains
-  if (!parsed.hostname.endsWith('meshy.ai') && !parsed.hostname.endsWith('cdn.meshy.ai')) {
-    return NextResponse.json({ error: 'url not allowed' }, { status: 403 })
+  if (parsed.protocol !== 'https:') {
+    return NextResponse.json({ error: 'only https urls allowed' }, { status: 403 })
   }
 
   try {

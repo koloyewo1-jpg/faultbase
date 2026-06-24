@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 
 // Each entry: [startSeconds, label]
 const LOADING_STAGES: [number, string][] = [
-  [0,   'Analysing description…'],
-  [20,  'Building 3D model…'],
-  [80,  'Applying materials…'],
-  [200, 'Almost ready…'],
+  [0,   'Building geometry…'],
+  [85,  'Applying textures…'],
+  [170, 'Almost ready…'],
 ]
 
 const MESHY_EXAMPLES = [
@@ -171,28 +170,58 @@ export default function WorldPage() {
     setMeshyModelUrl(null)
     setMeshyModelReady(false)
     setMeshyProgress(0)
-    // Revoke previous blob URL to free memory
     if (meshyBlobUrlRef.current) {
       URL.revokeObjectURL(meshyBlobUrlRef.current)
       meshyBlobUrlRef.current = null
     }
     try {
-      const res = await fetch('/api/generate-3d', {
+      // Step 1: Start job — server runs Claude enhance + preview poll + starts refine
+      const startRes = await fetch('/api/generate-3d', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: meshyPrompt }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Generation failed')
-      // Convert base64 → Blob URL so GLTFLoader loads from same origin
-      const bytes = atob(data.model_data)
-      const array = new Uint8Array(bytes.length)
-      for (let i = 0; i < bytes.length; i++) array[i] = bytes.charCodeAt(i)
-      const blob = new Blob([array], { type: 'model/gltf-binary' })
-      const objectUrl = URL.createObjectURL(blob)
-      meshyBlobUrlRef.current = objectUrl
-      setMeshyProgress(100)
-      setMeshyModelUrl(objectUrl)
+      const startData = await startRes.json()
+      if (!startRes.ok) throw new Error(startData.error || 'Generation failed')
+      const { refine_task_id } = startData
+
+      // Step 2: Browser polls refine until SUCCEEDED (up to 3 min)
+      const pollDeadline = Date.now() + 180_000
+      await new Promise<void>((resolve, reject) => {
+        const poll = async () => {
+          if (Date.now() > pollDeadline) {
+            reject(new Error('Refine timed out — please try again'))
+            return
+          }
+          try {
+            const pollRes = await fetch(`/api/poll-3d?task_id=${refine_task_id}`)
+            const pollData = await pollRes.json()
+            if (!pollRes.ok) throw new Error(pollData.error || 'Poll failed')
+
+            if (pollData.status === 'SUCCEEDED') {
+              const glbUrl = pollData.model_urls?.glb
+              if (!glbUrl) throw new Error('No GLB URL in response')
+              // Fetch GLB server-side to avoid CORS
+              const glbRes = await fetch(`/api/proxy-glb?url=${encodeURIComponent(glbUrl)}`)
+              if (!glbRes.ok) throw new Error(`Failed to fetch GLB: ${glbRes.status}`)
+              const arrayBuffer = await glbRes.arrayBuffer()
+              const blob = new Blob([arrayBuffer], { type: 'model/gltf-binary' })
+              const objectUrl = URL.createObjectURL(blob)
+              meshyBlobUrlRef.current = objectUrl
+              setMeshyProgress(100)
+              setMeshyModelUrl(objectUrl)
+              resolve()
+            } else if (pollData.status === 'FAILED' || pollData.status === 'EXPIRED') {
+              reject(new Error(`Refine ${pollData.status.toLowerCase()}`))
+            } else {
+              setTimeout(poll, 5_000)
+            }
+          } catch (e) {
+            reject(e)
+          }
+        }
+        setTimeout(poll, 5_000)
+      })
     } catch (e: any) {
       setMeshyError(e.message || 'Generation failed')
     } finally {

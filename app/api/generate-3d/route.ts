@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-export const maxDuration = 300
+export const maxDuration = 120
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const MESHY_BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d'
 const POLL_MS = 5_000
-const TIMEOUT_MS = 300_000
-
-// ── Step 1: Claude prompt enhancement ───────────────────────────────────────
+// Budget for polling preview — must leave time for Claude + network within maxDuration
+const PREVIEW_TIMEOUT_MS = 90_000
 
 async function enhancePrompt(userPrompt: string): Promise<string> {
   try {
@@ -43,53 +42,9 @@ Apply the same principle to any industrial component the user types.`,
   }
 }
 
-// ── Meshy helpers ────────────────────────────────────────────────────────────
-
-async function startPreview(prompt: string, apiKey: string): Promise<string> {
-  const res = await fetch(MESHY_BASE, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode: 'preview', prompt, art_style: 'realistic', should_remesh: true }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Meshy preview start failed ${res.status}: ${body.slice(0, 200)}`)
-  }
-  return (await res.json()).result as string
-}
-
-async function startRefine(previewTaskId: string, apiKey: string): Promise<string> {
-  const res = await fetch(MESHY_BASE, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode: 'refine', preview_task_id: previewTaskId, texture_richness: 'high' }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Meshy refine start failed ${res.status}: ${body.slice(0, 200)}`)
-  }
-  return (await res.json()).result as string
-}
-
-async function pollTask(id: string, apiKey: string) {
-  const res = await fetch(`${MESHY_BASE}/${id}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  })
-  if (!res.ok) throw new Error(`Meshy poll failed: ${res.status}`)
-  return res.json()
-}
-
-async function fetchGlbAsBase64(glbUrl: string): Promise<string> {
-  const glbRes = await fetch(glbUrl)
-  if (!glbRes.ok) throw new Error(`Failed to fetch GLB binary: ${glbRes.status}`)
-  return Buffer.from(await glbRes.arrayBuffer()).toString('base64')
-}
-
 function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
-
-// ── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -103,27 +58,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Meshy API key not configured' }, { status: 503 })
     }
 
-    const deadline = Date.now() + TIMEOUT_MS
-
     // Step 1: Enhance prompt
     console.log('Step 1: Enhancing prompt with Claude...')
     const enhanced = await enhancePrompt(prompt.trim())
     console.log('Enhanced prompt:', enhanced)
 
-    // Step 2: Preview
+    // Step 2: Start preview task
     console.log('Step 2: Starting Meshy text-to-3D preview...')
-    const previewId = await startPreview(enhanced, apiKey)
+    const previewRes = await fetch(MESHY_BASE, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'preview', prompt: enhanced, art_style: 'realistic', should_remesh: true }),
+    })
+    if (!previewRes.ok) {
+      const body = await previewRes.text()
+      throw new Error(`Meshy preview start failed ${previewRes.status}: ${body.slice(0, 200)}`)
+    }
+    const previewId: string = (await previewRes.json()).result
     console.log('Preview task ID:', previewId)
 
-    let previewGlbUrl: string | null = null
-    while (Date.now() < deadline) {
+    // Step 3: Poll preview until SUCCEEDED
+    const previewDeadline = Date.now() + PREVIEW_TIMEOUT_MS
+    while (Date.now() < previewDeadline) {
       await sleep(POLL_MS)
-      const task = await pollTask(previewId, apiKey)
+      const pollRes = await fetch(`${MESHY_BASE}/${previewId}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      })
+      if (!pollRes.ok) throw new Error(`Meshy preview poll failed: ${pollRes.status}`)
+      const task = await pollRes.json()
       console.log('Step 4: Polling Meshy preview... status:', task.status)
 
       if (task.status === 'SUCCEEDED') {
-        previewGlbUrl = task.model_urls?.glb ?? null
-        console.log('Preview succeeded, GLB URL:', previewGlbUrl)
+        console.log('Preview succeeded, starting refine...')
         break
       }
       if (task.status === 'FAILED' || task.status === 'EXPIRED') {
@@ -132,36 +98,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!previewGlbUrl) {
-      return NextResponse.json({ error: 'Generation timed out during preview' }, { status: 504 })
-    }
-
-    // Step 3: Refine
+    // Step 4: Start refine task — return task ID immediately, browser polls
     console.log('Step 5: Starting refine step, preview ID:', previewId)
-    const refineId = await startRefine(previewId, apiKey)
+    const refineRes = await fetch(MESHY_BASE, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'refine', preview_task_id: previewId, texture_richness: 'high' }),
+    })
+    if (!refineRes.ok) {
+      const body = await refineRes.text()
+      throw new Error(`Meshy refine start failed ${refineRes.status}: ${body.slice(0, 200)}`)
+    }
+    const refineId: string = (await refineRes.json()).result
     console.log('Refine task ID:', refineId)
 
-    while (Date.now() < deadline) {
-      await sleep(POLL_MS)
-      const task = await pollTask(refineId, apiKey)
-      console.log('Refine status:', task.status)
-
-      if (task.status === 'SUCCEEDED') {
-        const glbUrl = task.model_urls?.glb ?? previewGlbUrl
-        console.log('Refine complete, GLB URL:', glbUrl)
-        const model_data = await fetchGlbAsBase64(glbUrl)
-        return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
-      }
-      if (task.status === 'FAILED' || task.status === 'EXPIRED') {
-        console.error('Refine failed, falling back to preview GLB')
-        break
-      }
-    }
-
-    // Fallback: return preview GLB if refine failed or timed out
-    console.log('Final GLB URL (preview fallback):', previewGlbUrl)
-    const model_data = await fetchGlbAsBase64(previewGlbUrl)
-    return NextResponse.json({ model_data, content_type: 'model/gltf-binary' })
+    return NextResponse.json({ refine_task_id: refineId })
 
   } catch (error: any) {
     console.error('generate-3d error:', error?.message)
