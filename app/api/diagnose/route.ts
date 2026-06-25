@@ -84,6 +84,7 @@ STRICT RULES:
 1. Only use information from the fault records provided. Do not add, invent or infer anything.
 2. Always list safety precautions first and prominently.
 3. Return ONLY a JSON object — no other text.
+4. Never use markdown formatting. No bullet points, no dashes, no asterisks, no bold, no headers. Write all text fields in plain professional sentences only.
 
 Return this exact JSON structure:
 {

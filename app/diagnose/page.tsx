@@ -2,6 +2,18 @@
 import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 
+function stripMarkdown(text: string): string {
+  if (!text) return text
+  return text
+    .split('\n')
+    .filter(line => !/^[-*#]+\s/.test(line.trim()))   // drop lines starting with - * #
+    .join('\n')
+    .replace(/\*\*(.+?)\*\*/g, '$1')                  // remove **bold**
+    .replace(/\*(.+?)\*/g, '$1')                       // remove *italic*
+    .replace(/`(.+?)`/g, '$1')                         // remove `code`
+    .trim()
+}
+
 const ModelViewer = dynamic(() => import('../components/ModelViewer'), { ssr: false })
 
 const MODEL_PATHS: Record<string, string> = {
@@ -261,14 +273,14 @@ export default function DiagnosePage() {
             </div>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>What this means</div>
-              <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{result.meaning}</div>
+              <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{stripMarkdown(result.meaning)}</div>
             </div>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Likely causes (ranked)</div>
               {result.top_causes?.map((c: any) => (
                 <div key={c.rank} style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start' }}>
                   <span style={{ fontSize: 10, fontWeight: 600, background: '#f3f4f6', color: '#6b7280', borderRadius: 4, padding: '2px 6px', flexShrink: 0, marginTop: 2 }}>#{c.rank}</span>
-                  <span style={{ fontSize: 13, color: '#111827', flex: 1, lineHeight: 1.5 }}>{c.cause}</span>
+                  <span style={{ fontSize: 13, color: '#111827', flex: 1, lineHeight: 1.5 }}>{stripMarkdown(c.cause)}</span>
                   <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, flexShrink: 0, background: c.likelihood === 'high' ? '#fef2f2' : c.likelihood === 'medium' ? '#fffbeb' : '#f3f4f6', color: c.likelihood === 'high' ? '#991b1b' : c.likelihood === 'medium' ? '#92400e' : '#6b7280' }}>{c.likelihood}</span>
                 </div>
               ))}
@@ -278,7 +290,7 @@ export default function DiagnosePage() {
               {result.actions?.map((a: any) => (
                 <div key={a.step} style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3f4f6', background: a.caution ? '#fffbeb' : 'transparent', borderRadius: a.caution ? 6 : 0, paddingLeft: a.caution ? 8 : 0 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', minWidth: 20, flexShrink: 0 }}>{a.step}.</span>
-                  <span style={{ fontSize: 13, color: '#111827', flex: 1, lineHeight: 1.5 }}>{a.instruction}</span>
+                  <span style={{ fontSize: 13, color: '#111827', flex: 1, lineHeight: 1.5 }}>{stripMarkdown(a.instruction)}</span>
                   {a.caution && (
                     <span style={{ fontSize: 10, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 4, padding: '2px 6px', flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }}>CAUTION</span>
                   )}
@@ -287,7 +299,7 @@ export default function DiagnosePage() {
             </div>
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Escalation guidance</div>
-              <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>{result.escalation_guidance}</div>
+              <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>{stripMarkdown(result.escalation_guidance)}</div>
             </div>
             <ModelViewer
               machineId={machineId}
