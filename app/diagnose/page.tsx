@@ -1,6 +1,5 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import dynamic from 'next/dynamic'
 
 function stripMarkdown(text: string): string {
   if (!text) return text
@@ -14,13 +13,6 @@ function stripMarkdown(text: string): string {
     .trim()
 }
 
-const ModelViewer = dynamic(() => import('../components/ModelViewer'), { ssr: false })
-
-const MODEL_PATHS: Record<string, string> = {
-  'general-conveyor': '/conveyor.glb',
-  'general-motors':   '/motor.glb',
-  'general-vfd':      '/panel.glb',
-}
 
 const MACHINES = [
   { id: 'general-conveyor', label: 'Conveyor' },
@@ -142,6 +134,8 @@ export default function DiagnosePage() {
       const data = await res.json()
       if (data.error) {
         setError('Diagnosis service error. Please try again.')
+      } else if (data.lowConfidence) {
+        setError(data.message)
       } else if (!data.matched) {
         setError(data.message)
       } else {
@@ -301,13 +295,6 @@ export default function DiagnosePage() {
               <div style={{ fontSize: 10, fontWeight: 600, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Escalation guidance</div>
               <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>{stripMarkdown(result.escalation_guidance)}</div>
             </div>
-            <ModelViewer
-              machineId={machineId}
-              modelPath={MODEL_PATHS[machineId]}
-              faultZone={MACHINES.find(m => m.id === machineId)?.label ?? ''}
-              title={result.title ?? ''}
-            />
-
             <button
               type="button"
               onClick={reset}

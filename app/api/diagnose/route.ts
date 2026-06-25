@@ -13,7 +13,7 @@ function searchFaults(machineId: string, input: string) {
   const inputLower = input.toLowerCase()
   const words = inputLower.split(/\s+/).filter(w => w.length > 3)
 
-  type ScoredFault = { fault: any; score: number }
+  type ScoredFault = { fault: any; score: number; wordMatches: number; idMatch: boolean }
 
   const scored: ScoredFault[] = kb.faults
     .filter((fault: any) => fault.status === 'approved')
@@ -35,12 +35,17 @@ function searchFaults(machineId: string, input: string) {
       const machineBonus = fault.machine_id === machineId ? 10 : 0
       const score = (idMatch ? 20 : 0) + wordMatches + machineBonus
 
-      return { fault, score }
+      return { fault, score, wordMatches, idMatch }
     })
     .filter(Boolean) as ScoredFault[]
 
   scored.sort((a, b) => b.score - a.score)
-  return scored.slice(0, 3).map(s => s.fault)
+
+  return {
+    faults: scored.slice(0, 3).map(s => s.fault),
+    topWordMatches: scored.length > 0 ? scored[0].wordMatches : 0,
+    hasIdMatch: scored.length > 0 ? scored[0].idMatch : false,
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -54,12 +59,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const matched = searchFaults(machine_id, input)
+    const { faults: matched, topWordMatches, hasIdMatch } = searchFaults(machine_id, input)
 
     if (matched.length === 0) {
       return NextResponse.json({
         matched: false,
         message: 'No approved fault records found for this description. Contact your engineer to add this fault to the knowledge base.'
+      })
+    }
+
+    // Too few keyword matches and no direct fault code match — description is too vague
+    if (!hasIdMatch && topWordMatches < 2) {
+      return NextResponse.json({
+        lowConfidence: true,
+        message: 'Your description is too vague to match a specific fault. Please describe what you see, what you hear, or what the machine is doing in more detail.'
       })
     }
 
