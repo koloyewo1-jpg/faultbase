@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { createClient } from '@supabase/supabase-js'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 // Import JSON directly — works reliably in Vercel serverless
 import knowledgeBase from '../../../data/knowledge-base.json'
@@ -124,6 +130,17 @@ Using ONLY the above records, provide a structured diagnosis.`
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
     const clean = text.replace(/```json|```/g, '').trim()
     const diagnosis = JSON.parse(clean)
+
+    // Fire-and-forget: log diagnosis to Supabase (never blocks the response)
+    supabase.from('diagnosis_logs').insert({
+      machine_type: machine_id,
+      user_query: input,
+      matched_fault_id: matched[0]?.id ?? null,
+      matched_fault_title: matched[0]?.title ?? null,
+      match_confidence: 'high',
+      ai_response_summary: text.substring(0, 500),
+      low_confidence: false,
+    }).then(() => {}, () => {})
 
     return NextResponse.json({ matched: true, diagnosis })
 
