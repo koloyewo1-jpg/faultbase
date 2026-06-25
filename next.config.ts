@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     "/api/diagnose": ["./data/**/*"],
   },
   // Prevent Turbopack/webpack from bundling Node.js-only packages used in API routes
-  serverExternalPackages: ['pdf-parse', 'mammoth'],
+  serverExternalPackages: ['mammoth'],
 };
 
 export default nextConfig;

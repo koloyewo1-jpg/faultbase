@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { extractText as extractPdfText } from 'unpdf'
 
 export const maxDuration = 120
 
@@ -9,10 +10,8 @@ async function extractText(buffer: Buffer, filename: string): Promise<string> {
   const ext = filename.toLowerCase().split('.').pop()
 
   if (ext === 'pdf') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse')
-    const data = await pdfParse(buffer)
-    return data.text as string
+    const { text } = await extractPdfText(new Uint8Array(buffer), { mergePages: true })
+    return text
   }
 
   if (ext === 'docx') {
