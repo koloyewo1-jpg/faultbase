@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import knowledgeBase from '../../../data/knowledge-base.json'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -11,19 +12,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Import JSON directly — works reliably in Vercel serverless
-import knowledgeBase from '../../../data/knowledge-base.json'
+async function getApprovedFaults(): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('fault_records')
+      .select('*')
+      .eq('status', 'approved')
 
-function searchFaults(machineId: string, input: string) {
-  const kb = knowledgeBase as any
+    if (!error && data && data.length > 0) return data
+  } catch {
+    // fall through to local JSON
+  }
+  // Fallback: local knowledge-base.json
+  return (knowledgeBase as any).faults.filter((f: any) => f.status === 'approved')
+}
+
+function searchFaults(faults: any[], machineId: string, input: string) {
   const inputLower = input.toLowerCase()
-  // Split on spaces AND hyphens so "e-stop" → ["e","stop"], then keep words ≥ 3 chars
+  // Split on spaces AND hyphens so "e-stop" → ["e","stop"], keep words ≥ 3 chars
   const words = inputLower.split(/[\s\-\/]+/).filter(w => w.length >= 3)
 
   type ScoredFault = { fault: any; score: number; wordMatches: number; idMatch: boolean }
 
-  const scored: ScoredFault[] = kb.faults
-    .filter((fault: any) => fault.status === 'approved')
+  const scored: ScoredFault[] = faults
     .map((fault: any) => {
       const searchable = [
         fault.id,
@@ -31,14 +42,13 @@ function searchFaults(machineId: string, input: string) {
         fault.category,
         fault.meaning,
         ...(fault.symptoms ?? []),
-        ...fault.causes.map((c: any) => c.cause)
+        ...(fault.causes ?? []).map((c: any) => c.cause),
       ].join(' ').toLowerCase()
 
       const idMatch = fault.id.toLowerCase().includes(inputLower)
       const wordMatches = words.filter(w => searchable.includes(w)).length
       if (!idMatch && wordMatches === 0) return null
 
-      // machine_id match adds a bonus so same-category results rank higher
       const machineBonus = fault.machine_id === machineId ? 10 : 0
       const score = (idMatch ? 20 : 0) + wordMatches + machineBonus
 
@@ -66,7 +76,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { faults: matched, topWordMatches, hasIdMatch } = searchFaults(machine_id, input)
+    const allFaults = await getApprovedFaults()
+    const { faults: matched, topWordMatches, hasIdMatch } = searchFaults(allFaults, machine_id, input)
 
     if (matched.length === 0) {
       return NextResponse.json({
