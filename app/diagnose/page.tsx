@@ -141,14 +141,14 @@ export default function DiagnosePage() {
       })
       const data = await res.json()
       if (data.error) {
-        setError('Diagnosis service error — please try again.')
+        setError('Diagnosis service error. Please try again.')
       } else if (!data.matched) {
         setError(data.message)
       } else {
         setResult(data.diagnosis)
       }
     } catch {
-      setError('Network error — please try again')
+      setError('Network error. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -199,7 +199,7 @@ export default function DiagnosePage() {
             </select>
           </div>
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Describe the fault — plain English or fault code</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Describe the fault: plain English or fault code</div>
             <textarea
               ref={inputRef}
               onFocus={() => setShowExamples(false)}
@@ -230,10 +230,10 @@ export default function DiagnosePage() {
               'Cylinder not extending on command',
               'Safety relay not resetting after E-stop',
               'Motor overload relay tripped',
-              'Heat seal failing — weak or incomplete seal',
+              'Heat seal failing, weak or incomplete seal',
               'Metal detector giving false rejects',
               'VFD showing fault code on display',
-              'Machine not starting — multiple interlocks',
+              'Machine not starting, multiple interlocks',
             ].map((example) => (
               <button
                 key={example}
@@ -245,7 +245,7 @@ export default function DiagnosePage() {
               </button>
             ))}
             <div style={{ marginTop: 4, padding: '10px 12px', background: '#EAF3DE', borderRadius: 8, fontSize: 12, color: '#27500A', lineHeight: 1.5 }}>
-              Type anything in plain English — fault code, what you see, what you hear. No training needed.
+              Type anything in plain English: fault code, what you see, what you hear. No training needed.
             </div>
           </div>
         )}
@@ -264,7 +264,7 @@ export default function DiagnosePage() {
         {result && (
           <div>
             <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>⚠ Safety precautions — read before proceeding</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>⚠ Safety precautions, read before proceeding</div>
               {result.safety_precautions?.map((p: string, i: number) => (
                 <div key={i} style={{ fontSize: 13, color: '#b91c1c', padding: '3px 0', display: 'flex', gap: 8, lineHeight: 1.5 }}>
                   <span style={{ flexShrink: 0 }}>•</span><span>{p}</span>
