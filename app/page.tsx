@@ -40,18 +40,18 @@ export default function HomePage() {
           <span style={{ color: '#185FA5' }}>your team needs answers fast.</span>
         </h1>
         <p style={{ fontSize: 'clamp(15px, 2vw, 17px)', color: '#6b7280', lineHeight: 1.7, maxWidth: 560, margin: '0 auto 16px' }}>
-          Kolatron.ai gives manufacturing teams instant, structured fault diagnosis — powered by your own approved knowledge base, not random AI guesswork. Built for food, pharma, automotive, chemical, packaging, and every other manufacturing environment.
+          Kolatron.ai gives manufacturing teams instant, structured fault diagnosis powered by their own approved knowledge base, not random AI guesswork. Built for food, pharma, automotive, chemical, packaging, and every other manufacturing environment.
         </p>
         <div className="hero-buttons" style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
           <a href="#early-access" style={{ padding: '13px 28px', fontSize: 15, fontWeight: 600, background: '#185FA5', color: '#fff', borderRadius: 8, textDecoration: 'none' }}>
-            Request early access — free
+            Request early access, free
           </a>
           <Link href="/diagnose" style={{ padding: '12px 24px', fontSize: 14, fontWeight: 500, background: 'transparent', color: '#111827', border: '1px solid #d1d5db', borderRadius: 8, textDecoration: 'none' }}>
             See live demo →
           </Link>
         </div>
         <p style={{ fontSize: 12, color: '#9ca3af' }}>
-          <strong style={{ color: '#27500A' }}>Free during early access</strong> — no credit card, no commitment
+          <strong style={{ color: '#27500A' }}>Free during early access.</strong> No credit card, no commitment.
         </p>
       </div>
 
@@ -80,9 +80,9 @@ export default function HomePage() {
             {/* Steps */}
             <div>
               {[
-                ['Upload your equipment manual', 'PDF or DOCX. Kolatron extracts every fault code, cause, and action into a structured knowledge base. The manual is deleted within 24 hours — only your structured data remains.'],
+                ['Upload your equipment manual', 'PDF or DOCX. Kolatron extracts every fault code, cause, and action into a structured knowledge base. The manual is deleted within 24 hours. Only your structured data remains.'],
                 ['Engineers review and approve', 'Nothing reaches a technician until an engineer has reviewed it and a manager has approved it. Draft → Review → Approved. Full version control throughout.'],
-                ['Technicians describe what they see', 'Plain English or a fault code — no training needed. "Conveyor belt stopped, red alarm light flashing" is enough to get a structured diagnosis.'],
+                ['Technicians describe what they see', 'Plain English or a fault code, no training needed. "Conveyor belt stopped, red alarm light flashing" is enough to get a structured diagnosis.'],
                 ['Kolatron returns a structured diagnosis', 'Safety precautions first. Ranked causes. Step-by-step actions with caution flags. Tools needed, fix time, and escalation guidance.'],
                 ['Every diagnosis is logged', 'Who ran it, when, which machine, what the system returned. Full audit trail for ISO, GMP, and any other compliance requirement.'],
               ].map(([title, desc], i) => (
@@ -109,15 +109,15 @@ export default function HomePage() {
                   "ERROR LED flashing red, PLC stopped mid-batch"
                 </div>
                 <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>⚠ Safety precautions — read first</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>⚠ Safety precautions, read first</div>
                   <div style={{ fontSize: 12, color: '#b91c1c', lineHeight: 1.5 }}>• Power down panel before any hardware changes.</div>
                   <div style={{ fontSize: 12, color: '#b91c1c', lineHeight: 1.5, marginTop: 3 }}>• Document the error and notify QA before acting.</div>
                 </div>
                 <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px', marginBottom: 10, fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
-                  <strong style={{ color: '#111827' }}>What this means: </strong>CPU detected a fault — configuration mismatch, memory error, or hardware fault.
+                  <strong style={{ color: '#111827' }}>What this means: </strong>CPU detected a fault. Likely a configuration mismatch, memory error, or hardware fault.
                 </div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Likely causes (ranked)</div>
-                {[['#1', "Configuration mismatch — modules don't match hardware config", 'high'], ['#2', 'Memory card error — faulty or incompatible card', 'medium'], ['#3', 'Internal CPU error — firmware or hardware fault', 'medium']].map(([rank, cause, lh]) => (
+                {[['#1', "Configuration mismatch, modules don't match hardware config", 'high'], ['#2', 'Memory card error, faulty or incompatible card', 'medium'], ['#3', 'Internal CPU error, firmware or hardware fault', 'medium']].map(([rank, cause, lh]) => (
                   <div key={rank} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: rank !== '#3' ? '1px solid #f3f4f6' : 'none', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: 9, fontWeight: 600, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '2px 5px', flexShrink: 0 }}>{rank}</span>
                     <span style={{ fontSize: 12, color: '#111827', flex: 1 }}>{cause}</span>
@@ -144,7 +144,7 @@ export default function HomePage() {
           </p>
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '24px 28px' }}>
             {[
-              ['#FCEBEB', '#A32D2D', 'No approved record — AI is not called', 'The system searches only your approved fault records. If nothing matches, the AI is never contacted. Zero risk of an invented answer reaching your technician.'],
+              ['#FCEBEB', '#A32D2D', 'No approved record, AI is not called', 'The system searches only your approved fault records. If nothing matches, the AI is never contacted. Zero risk of an invented answer reaching your technician.'],
               ['#E6F1FB', '#185FA5', 'Technician sees a clear message', '"No approved record found for this fault. Contact your engineer to add this to the knowledge base." They are never left with a guess.'],
               ['#EAF3DE', '#27500A', 'The gap is logged automatically', 'Every unanswered query is captured with machine, description, timestamp, and technician. Engineers see a queue of knowledge gaps to fill.'],
               ['#EAF3DE', '#27500A', 'Engineer adds it, manager approves, it goes live', 'Added as draft, reviewed by engineering, approved, and available for every future diagnosis. Your knowledge base grows with real experience.'],
@@ -202,16 +202,16 @@ export default function HomePage() {
           <div style={{ fontSize: 11, fontWeight: 600, color: '#185FA5', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Features</div>
           <h2 style={{ fontSize: 'clamp(22px, 4vw, 28px)', fontWeight: 700, marginBottom: 12 }}>Everything your maintenance team needs</h2>
           <p style={{ fontSize: 15, color: '#6b7280', lineHeight: 1.7, maxWidth: 540, marginBottom: 28 }}>
-            Designed for the reality of regulated manufacturing — where safety, consistency, and auditability are not optional.
+            Designed for the reality of regulated manufacturing, where safety, consistency, and auditability are not optional.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
             {[
               ['Plain English input', 'No fault codes to memorise. Describe what you see in plain English and Kolatron finds the right approved record.'],
-              ['Safety precautions first', 'Always shown before causes or actions — by design. Not configurable. This is how the system works.'],
+              ['Safety precautions first', 'Always shown before causes or actions, by design. Not configurable. This is how the system works.'],
               ['Controlled knowledge base', 'Draft → Review → Approved. Only approved records reach technicians. Full version history on every fault.'],
               ['PDF and DOCX upload', 'Upload any equipment manual. Kolatron structures the fault data ready for your engineers to review and approve.'],
-              ['Role-based access', 'Technician · Engineer · Manager · QA. Each role sees exactly what they should — nothing more.'],
-              ['Full audit trail', 'Every diagnosis, knowledge change, and approval — timestamped, attributed, and exportable for compliance.'],
+              ['Role-based access', 'Technician · Engineer · Manager · QA. Each role sees exactly what they need, nothing more.'],
+              ['Full audit trail', 'Every diagnosis, knowledge change, and approval is timestamped, attributed, and exportable for compliance.'],
               ['Works on any device', 'Browser-based. Works on a tablet mounted next to the machine. No app to install, no updates to manage.'],
               ['Gets smarter over time', 'Unanswered queries become engineering tasks. Technician feedback refines cause rankings.'],
               ['Your data stays yours', 'Export everything at any time. Delete on request within 30 days. You own your knowledge base.'],
@@ -236,7 +236,7 @@ export default function HomePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {[
               ['Where is our data stored?', 'UK or EU servers (AWS London or Frankfurt). You choose your region. Data never leaves those regions.'],
-              ['What happens to our manual after upload?', 'Processed and deleted within 24 hours. Only the structured fault records remain — nothing else is retained.'],
+              ['What happens to our manual after upload?', 'Processed and deleted within 24 hours. Only the structured fault records remain. Nothing else is retained.'],
               ['Who can see our data?', 'Only your own users. Complete database-level isolation. Kolatron staff cannot read your fault records.'],
               ['Does our data go to the AI?', 'Only the matched fault record when a diagnosis is run. Anthropic does not train on API data. Covered in our DPA.'],
               ['Is it encrypted?', 'AES-256 at rest. TLS 1.3 in transit. Row-level security isolates each company completely.'],
