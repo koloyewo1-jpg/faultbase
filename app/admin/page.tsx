@@ -1,9 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 const ADMIN_PW = 'kolatron2024'
 const AUTH_KEY = 'kolatron_admin_auth'
+
+const MACHINE_TYPES = [
+  { id: 'general-conveyor', label: 'Conveyor' },
+  { id: 'general-pneumatics', label: 'Pneumatic System' },
+  { id: 'general-sensors', label: 'Sensors' },
+  { id: 'general-motors', label: 'Motors' },
+  { id: 'general-vfd', label: 'VFD / Variable Speed Drive' },
+  { id: 'general-plc', label: 'PLC / Controls' },
+  { id: 'general-safety', label: 'Safety Systems' },
+  { id: 'general-packaging', label: 'Packaging Machinery' },
+  { id: 'general-reject', label: 'Reject Systems' },
+]
 
 interface Fault {
   id: string
@@ -36,6 +48,18 @@ interface FormState {
   checks: string
 }
 
+interface ExtractedFault {
+  fault_title: string
+  category: string
+  machine_id: string
+  symptoms: string[]
+  likely_causes: { description: string; rank: number }[]
+  checks_to_perform: { instruction: string }[]
+  safety_precautions: string[]
+  escalation_guidance: string
+  status: string
+}
+
 const EMPTY_FORM: FormState = {
   id: '', title: '', category: '', machine_id: '', status: 'draft',
   symptoms: '', causes: '', checks: '',
@@ -46,7 +70,6 @@ const DARK = '#111827'
 const MUTED = '#6b7280'
 const BORDER = '#e5e7eb'
 const LIGHT_BG = '#f9fafb'
-const BLUE_LIGHT = '#E6F1FB'
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '8px 10px', fontSize: 13, border: `1px solid ${BORDER}`,
@@ -96,16 +119,31 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState<boolean | null>(null)
   const [pwInput, setPwInput] = useState('')
   const [pwError, setPwError] = useState(false)
-  const [tab, setTab] = useState<'faults' | 'logs'>('faults')
+  const [tab, setTab] = useState<'faults' | 'logs' | 'upload'>('faults')
+
+  // Fault records tab
   const [faults, setFaults] = useState<Fault[]>([])
-  const [logs, setLogs] = useState<Log[]>([])
   const [faultsLoading, setFaultsLoading] = useState(false)
-  const [logsLoading, setLogsLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Diagnosis logs tab
+  const [logs, setLogs] = useState<Log[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+
+  // Upload manual tab
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadMachineType, setUploadMachineType] = useState(MACHINE_TYPES[0].id)
+  const [extracting, setExtracting] = useState(false)
+  const [extractError, setExtractError] = useState('')
+  const [extractedFaults, setExtractedFaults] = useState<ExtractedFault[]>([])
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
+  const [savingExtracted, setSavingExtracted] = useState(false)
+  const [savedCount, setSavedCount] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setAuthed(localStorage.getItem(AUTH_KEY) === 'true')
@@ -223,6 +261,89 @@ export default function AdminPage() {
     setForm(prev => ({ ...prev, [key]: val }))
   }
 
+  async function handleExtract(e: React.FormEvent) {
+    e.preventDefault()
+    if (!uploadFile) return
+    setExtracting(true)
+    setExtractError('')
+    setExtractedFaults([])
+    setSavedCount(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', uploadFile)
+      fd.append('machine_type', uploadMachineType)
+      const r = await fetch('/api/admin/upload-manual', { method: 'POST', body: fd })
+      const d = await r.json()
+      if (!r.ok) {
+        setExtractError(d.error ?? 'Extraction failed')
+        return
+      }
+      const faultList: ExtractedFault[] = d.faults ?? []
+      setExtractedFaults(faultList)
+      setSelectedIndices(new Set(faultList.map((_, i) => i)))
+    } catch (err: any) {
+      setExtractError(err.message ?? 'Network error')
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  function toggleSelect(idx: number) {
+    setSelectedIndices(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (selectedIndices.size === extractedFaults.length) {
+      setSelectedIndices(new Set())
+    } else {
+      setSelectedIndices(new Set(extractedFaults.map((_, i) => i)))
+    }
+  }
+
+  async function handleSaveExtracted() {
+    const toSave = extractedFaults.filter((_, i) => selectedIndices.has(i))
+    if (toSave.length === 0) return
+    setSavingExtracted(true)
+    setSavedCount(null)
+    let saved = 0
+    for (const ef of toSave) {
+      const payload = {
+        title: ef.fault_title,
+        category: ef.category || 'General',
+        machine_id: ef.machine_id || uploadMachineType,
+        status: 'draft',
+        symptoms: Array.isArray(ef.symptoms) ? ef.symptoms : [],
+        causes: (ef.likely_causes ?? []).map((c: any, i: number) => ({
+          rank: c.rank ?? i + 1,
+          cause: c.description ?? c.cause ?? String(c),
+          likelihood: 'medium',
+          type: 'technical',
+        })),
+        checks: (ef.checks_to_perform ?? []).map((c: any) =>
+          typeof c === 'string' ? c : (c.instruction ?? String(c))
+        ),
+      }
+      const r = await fetch('/api/admin/faults', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (r.ok) saved++
+    }
+    setSavedCount(saved)
+    setSavingExtracted(false)
+    setExtractedFaults([])
+    setSelectedIndices(new Set())
+    setUploadFile(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    loadFaults()
+  }
+
   // ── Not yet hydrated ──────────────────────────────────────────────────────
   if (authed === null) return null
 
@@ -257,6 +378,12 @@ export default function AdminPage() {
   }
 
   // ── Authenticated dashboard ───────────────────────────────────────────────
+  const tabDefs: { key: 'faults' | 'logs' | 'upload'; label: string }[] = [
+    { key: 'faults', label: `Fault Records (${faults.length})` },
+    { key: 'logs', label: `Diagnosis Logs (${logs.length})` },
+    { key: 'upload', label: 'Upload Manual' },
+  ]
+
   return (
     <main style={{ minHeight: '100vh', background: LIGHT_BG, fontFamily: 'system-ui, sans-serif', color: DARK }}>
 
@@ -275,16 +402,13 @@ export default function AdminPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 20px' }}>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${BORDER}`, paddingBottom: 0 }}>
-          {(['faults', 'logs'] as const).map(t => {
-            const label = t === 'faults'
-              ? `Fault Records (${faults.length})`
-              : `Diagnosis Logs (${logs.length})`
-            const active = tab === t
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${BORDER}` }}>
+          {tabDefs.map(({ key, label }) => {
+            const active = tab === key
             return (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={key}
+                onClick={() => setTab(key)}
                 style={{
                   padding: '9px 18px', fontSize: 13, fontWeight: active ? 600 : 500,
                   background: 'none', border: 'none', cursor: 'pointer',
@@ -394,6 +518,175 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── Upload Manual tab ───────────────────────────────────────────── */}
+        {tab === 'upload' && (
+          <div style={{ maxWidth: 720 }}>
+
+            {/* Upload form */}
+            <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '24px 24px 20px', marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Extract fault records from a manual</div>
+              <div style={{ fontSize: 13, color: MUTED, marginBottom: 20, lineHeight: 1.6 }}>
+                Upload a PDF or DOCX equipment manual. Claude will read it and extract all fault records as drafts ready for your review.
+              </div>
+
+              <form onSubmit={handleExtract}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>Manual file <span style={{ color: '#b91c1c' }}>*</span></label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx"
+                      onChange={e => {
+                        setUploadFile(e.target.files?.[0] ?? null)
+                        setExtractedFaults([])
+                        setExtractError('')
+                        setSavedCount(null)
+                      }}
+                      style={{ ...inputStyle, padding: '6px 10px' }}
+                    />
+                    <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>Accepted formats: PDF, DOCX. Maximum ~30,000 characters of text will be sent to Claude.</div>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>Machine type</label>
+                    <select
+                      value={uploadMachineType}
+                      onChange={e => setUploadMachineType(e.target.value)}
+                      style={{ ...inputStyle, appearance: 'auto' }}
+                    >
+                      {MACHINE_TYPES.map(m => (
+                        <option key={m.id} value={m.id}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {extractError && (
+                  <div style={{ marginBottom: 14, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 12, color: '#b91c1c' }}>
+                    {extractError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!uploadFile || extracting}
+                  style={{ ...btnPrimary, opacity: !uploadFile || extracting ? 0.6 : 1 }}
+                >
+                  {extracting ? 'Extracting...' : 'Extract Faults'}
+                </button>
+
+                {extracting && (
+                  <span style={{ marginLeft: 12, fontSize: 12, color: MUTED }}>
+                    Reading manual and calling Claude — this can take up to 60 seconds for large files.
+                  </span>
+                )}
+              </form>
+            </div>
+
+            {/* Success banner */}
+            {savedCount !== null && (
+              <div style={{ padding: '12px 16px', background: '#EAF3DE', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 13, color: '#27500A', marginBottom: 20, fontWeight: 500 }}>
+                {savedCount} fault {savedCount === 1 ? 'record' : 'records'} saved to knowledge base as drafts. Review and approve them in the Fault Records tab.
+              </div>
+            )}
+
+            {/* Extracted results */}
+            {extractedFaults.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>
+                    {extractedFaults.length} fault {extractedFaults.length === 1 ? 'record' : 'records'} extracted
+                    {uploadFile && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, marginLeft: 8 }}>from {uploadFile.name}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <button
+                      onClick={toggleAll}
+                      style={{ ...btnSecondary, padding: '5px 12px', fontSize: 12 }}
+                    >
+                      {selectedIndices.size === extractedFaults.length ? 'Deselect all' : 'Select all'}
+                    </button>
+                    <button
+                      onClick={handleSaveExtracted}
+                      disabled={selectedIndices.size === 0 || savingExtracted}
+                      style={{ ...btnPrimary, opacity: selectedIndices.size === 0 || savingExtracted ? 0.6 : 1 }}
+                    >
+                      {savingExtracted
+                        ? 'Saving...'
+                        : `Save Selected (${selectedIndices.size}) to Knowledge Base`}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {extractedFaults.map((ef, i) => {
+                    const selected = selectedIndices.has(i)
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => toggleSelect(i)}
+                        style={{
+                          background: '#fff',
+                          border: `1px solid ${selected ? BLUE : BORDER}`,
+                          borderRadius: 8,
+                          padding: '14px 16px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          gap: 14,
+                          alignItems: 'flex-start',
+                          transition: 'border-color 0.1s',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleSelect(i)}
+                          onClick={e => e.stopPropagation()}
+                          style={{ marginTop: 2, flexShrink: 0, accentColor: BLUE, width: 15, height: 15, cursor: 'pointer' }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: DARK }}>
+                            {ef.fault_title}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                            {ef.category && (
+                              <span style={{ fontSize: 11, padding: '1px 8px', background: '#E6F1FB', color: '#0C447C', borderRadius: 8, fontWeight: 600 }}>
+                                {ef.category}
+                              </span>
+                            )}
+                            <span style={{ fontSize: 11, padding: '1px 8px', background: '#f3f4f6', color: MUTED, borderRadius: 8 }}>
+                              {ef.machine_id || uploadMachineType}
+                            </span>
+                            <StatusBadge status="draft" />
+                          </div>
+                          <div style={{ display: 'flex', gap: 16, fontSize: 12, color: MUTED }}>
+                            <span>{(ef.symptoms ?? []).length} symptom{(ef.symptoms ?? []).length !== 1 ? 's' : ''}</span>
+                            <span>{(ef.likely_causes ?? []).length} cause{(ef.likely_causes ?? []).length !== 1 ? 's' : ''}</span>
+                            <span>{(ef.checks_to_perform ?? []).length} check{(ef.checks_to_perform ?? []).length !== 1 ? 's' : ''}</span>
+                            <span>{(ef.safety_precautions ?? []).length} safety note{(ef.safety_precautions ?? []).length !== 1 ? 's' : ''}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={handleSaveExtracted}
+                    disabled={selectedIndices.size === 0 || savingExtracted}
+                    style={{ ...btnPrimary, opacity: selectedIndices.size === 0 || savingExtracted ? 0.6 : 1 }}
+                  >
+                    {savingExtracted
+                      ? 'Saving...'
+                      : `Save Selected (${selectedIndices.size}) to Knowledge Base`}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
