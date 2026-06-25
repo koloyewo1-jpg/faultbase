@@ -11,7 +11,8 @@ import knowledgeBase from '../../../data/knowledge-base.json'
 function searchFaults(machineId: string, input: string) {
   const kb = knowledgeBase as any
   const inputLower = input.toLowerCase()
-  const words = inputLower.split(/\s+/).filter(w => w.length > 3)
+  // Split on spaces AND hyphens so "e-stop" → ["e","stop"], then keep words ≥ 3 chars
+  const words = inputLower.split(/[\s\-\/]+/).filter(w => w.length >= 3)
 
   type ScoredFault = { fault: any; score: number; wordMatches: number; idMatch: boolean }
 
@@ -68,8 +69,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Too few keyword matches and no direct fault code match — description is too vague
-    if (!hasIdMatch && topWordMatches < 2) {
+    // Only reject if truly zero keyword matches and no fault code match — pure gibberish
+    if (!hasIdMatch && topWordMatches < 1) {
       return NextResponse.json({
         lowConfidence: true,
         message: 'Your description is too vague to match a specific fault. Please describe what you see, what you hear, or what the machine is doing in more detail.'
