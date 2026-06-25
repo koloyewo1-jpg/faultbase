@@ -9,17 +9,17 @@ async function extractText(buffer: Buffer, filename: string): Promise<string> {
   const ext = filename.toLowerCase().split('.').pop()
 
   if (ext === 'pdf') {
-    // Import from lib path to prevent pdf-parse loading its test files at import time
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse/lib/pdf-parse.js')
+    const pdfParse = require('pdf-parse')
     const data = await pdfParse(buffer)
     return data.text as string
   }
 
   if (ext === 'docx') {
-    const mammoth = await import('mammoth')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mammoth = require('mammoth')
     const result = await mammoth.extractRawText({ buffer })
-    return result.value
+    return result.value as string
   }
 
   throw new Error('Unsupported file type. Please upload a PDF or DOCX file.')
