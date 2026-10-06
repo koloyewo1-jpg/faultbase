@@ -16,22 +16,30 @@ function stripMarkdown(text: string): string {
 
 const CIRCUIT_TRACE_KEYWORDS = ['motor', 'plc', 'control', 'safety', 'vfd', 'electrical', 'drive']
 const CIRCUIT_TRACE_MACHINE_IDS = ['general-motors', 'general-plc', 'general-safety', 'general-vfd']
+const CIRCUIT_TRACE_TITLE_KEYWORDS = [
+  'motor', 'contactor', 'overload', 'relay', 'start', 'starting', 'energise', 'energize',
+  'trip', 'tripped', 'power', 'control circuit', 'e-stop', 'estop', 'interlock', 'solenoid', 'coil',
+]
 
 function shouldShowCircuitTrace(result: any, machineId: string): boolean {
   const category = String(result?.category ?? '').toLowerCase()
   const resultMachineId = String(result?.machine_id ?? '').toLowerCase()
+  const title = String(result?.title ?? '').toLowerCase()
   const keywordMatch = CIRCUIT_TRACE_KEYWORDS.some(k => category.includes(k) || resultMachineId.includes(k))
   const dropdownMatch = CIRCUIT_TRACE_MACHINE_IDS.includes(machineId)
+  const titleMatch = CIRCUIT_TRACE_TITLE_KEYWORDS.some(k => title.includes(k))
 
   console.log('Circuit Trace visibility check:', {
     category: result?.category,
     machine_id: result?.machine_id,
+    title: result?.title,
     selectedMachineId: machineId,
     keywordMatch,
     dropdownMatch,
+    titleMatch,
   })
 
-  return keywordMatch || dropdownMatch
+  return keywordMatch || dropdownMatch || titleMatch
 }
 
 const MACHINES = [
