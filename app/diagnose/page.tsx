@@ -14,6 +14,8 @@ function stripMarkdown(text: string): string {
 }
 
 
+const CIRCUIT_TRACE_CATEGORIES = ['Motors', 'PLC', 'Controls', 'Safety', 'VFD']
+
 const MACHINES = [
   { id: 'general-conveyor', label: 'Conveyor' },
   { id: 'general-pneumatics', label: 'Pneumatic System' },
@@ -291,6 +293,14 @@ export default function DiagnosePage() {
                 </div>
               ))}
             </div>
+            {CIRCUIT_TRACE_CATEGORIES.includes(result.category) && (
+              <a
+                href={`/circuit-trace?machine=${encodeURIComponent(MACHINES.find(m => m.id === machineId)?.label ?? machineId)}&fault=${encodeURIComponent(result.title ?? '')}`}
+                style={{ display: 'block', width: '100%', padding: '14px', fontSize: 14, fontWeight: 700, background: '#185FA5', color: '#fff', border: 'none', borderRadius: 8, textAlign: 'center', textDecoration: 'none', fontFamily: 'system-ui, sans-serif', boxSizing: 'border-box', marginBottom: 12 }}
+              >
+                Start Circuit Trace
+              </a>
+            )}
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Escalation guidance</div>
               <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>{stripMarkdown(result.escalation_guidance)}</div>

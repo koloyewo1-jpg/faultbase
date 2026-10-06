@@ -141,6 +141,7 @@ Using ONLY the above records, provide a structured diagnosis.`
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
     const clean = text.replace(/```json|```/g, '').trim()
     const diagnosis = JSON.parse(clean)
+    diagnosis.category = matched[0]?.category ?? null
 
     // Fire-and-forget: log diagnosis to Supabase (never blocks the response)
     supabase.from('diagnosis_logs').insert({
