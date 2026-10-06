@@ -43,22 +43,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: 422 })
     }
 
-    if (!text.trim()) {
-      return NextResponse.json({ error: 'Could not extract any text from the file' }, { status: 422 })
+    if (!text.trim() || text.trim().length < 100) {
+      return NextResponse.json(
+        { error: 'Could not extract readable text from this PDF. Try a text-based PDF rather than a scanned document.' },
+        { status: 422 }
+      )
     }
 
-    // Truncate to ~30k chars to stay within token limits
-    const truncated = text.slice(0, 30000)
+    // Truncate to ~20k chars to reduce processing time and stay within token limits
+    const truncated = text.slice(0, 20000)
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: `You are an expert maintenance engineer. Extract all fault records from this machine manual text. For each fault, return a JSON array where each item has: fault_title, category, machine_id, symptoms (array), likely_causes (array of objects with description and rank), checks_to_perform (array of objects with instruction), safety_precautions (array), escalation_guidance, status set to 'draft'. Return only valid JSON, no other text.`,
-      messages: [{
-        role: 'user',
-        content: `Machine type: ${machineType}\n\nManual text:\n${truncated}`,
-      }],
-    })
+    let response
+    try {
+      response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: `You are an expert maintenance engineer. Extract all fault records from this machine manual text. For each fault, return a JSON array where each item has: fault_title, category, machine_id, symptoms (array), likely_causes (array of objects with description and rank), checks_to_perform (array of objects with instruction), safety_precautions (array), escalation_guidance, status set to 'draft'. Return only valid JSON, no other text.`,
+        messages: [{
+          role: 'user',
+          content: `Machine type: ${machineType}\n\nManual text:\n${truncated}`,
+        }],
+      })
+    } catch (err: any) {
+      console.error('Claude API error:', err?.message || err)
+      return NextResponse.json(
+        { error: 'Extraction timed out. Try a shorter document or split the manual into sections.' },
+        { status: 504 }
+      )
+    }
 
     const raw = response.content[0].type === 'text' ? response.content[0].text : '[]'
     const clean = raw.replace(/```json\s*|```/g, '').trim()
