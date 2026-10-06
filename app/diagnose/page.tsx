@@ -14,7 +14,25 @@ function stripMarkdown(text: string): string {
 }
 
 
-const CIRCUIT_TRACE_CATEGORIES = ['Motors', 'PLC', 'Controls', 'Safety', 'VFD']
+const CIRCUIT_TRACE_KEYWORDS = ['motor', 'plc', 'control', 'safety', 'vfd', 'electrical', 'drive']
+const CIRCUIT_TRACE_MACHINE_IDS = ['general-motors', 'general-plc', 'general-safety', 'general-vfd']
+
+function shouldShowCircuitTrace(result: any, machineId: string): boolean {
+  const category = String(result?.category ?? '').toLowerCase()
+  const resultMachineId = String(result?.machine_id ?? '').toLowerCase()
+  const keywordMatch = CIRCUIT_TRACE_KEYWORDS.some(k => category.includes(k) || resultMachineId.includes(k))
+  const dropdownMatch = CIRCUIT_TRACE_MACHINE_IDS.includes(machineId)
+
+  console.log('Circuit Trace visibility check:', {
+    category: result?.category,
+    machine_id: result?.machine_id,
+    selectedMachineId: machineId,
+    keywordMatch,
+    dropdownMatch,
+  })
+
+  return keywordMatch || dropdownMatch
+}
 
 const MACHINES = [
   { id: 'general-conveyor', label: 'Conveyor' },
@@ -293,18 +311,18 @@ export default function DiagnosePage() {
                 </div>
               ))}
             </div>
-            {CIRCUIT_TRACE_CATEGORIES.includes(result.category) && (
-              <a
-                href={`/circuit-trace?machine=${encodeURIComponent(MACHINES.find(m => m.id === machineId)?.label ?? machineId)}&fault=${encodeURIComponent(result.title ?? '')}`}
-                style={{ display: 'block', width: '100%', padding: '14px', fontSize: 14, fontWeight: 700, background: '#185FA5', color: '#fff', border: 'none', borderRadius: 8, textAlign: 'center', textDecoration: 'none', fontFamily: 'system-ui, sans-serif', boxSizing: 'border-box', marginBottom: 12 }}
-              >
-                Start Circuit Trace
-              </a>
-            )}
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Escalation guidance</div>
               <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>{stripMarkdown(result.escalation_guidance)}</div>
             </div>
+            {shouldShowCircuitTrace(result, machineId) && (
+              <a
+                href={`/circuit-trace?machine=${encodeURIComponent(MACHINES.find(m => m.id === machineId)?.label ?? machineId)}&fault=${encodeURIComponent(result.title ?? '')}`}
+                style={{ display: 'block', width: '100%', padding: '16px', fontSize: 16, fontWeight: 700, background: '#185FA5', color: '#fff', border: 'none', borderRadius: 8, textAlign: 'center', textDecoration: 'none', fontFamily: 'system-ui, sans-serif', boxSizing: 'border-box', marginBottom: 12 }}
+              >
+                Start Circuit Trace
+              </a>
+            )}
             <button
               type="button"
               onClick={reset}
