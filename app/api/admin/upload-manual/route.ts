@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
-        system: `You are an expert maintenance engineer. Extract all fault records from this machine manual text. For each fault, return a JSON array where each item has: fault_title, category, machine_id, symptoms (array), likely_causes (array of objects with description and rank), checks_to_perform (array of objects with instruction), safety_precautions (array), escalation_guidance, status set to 'draft'. Return only valid JSON, no other text.`,
+        system: `You are an expert maintenance engineer. Extract all fault records from this machine manual text. For each fault, return a JSON array where each item has: fault_title, category, machine_id, symptoms (array), likely_causes (array of objects with description and rank), checks_to_perform (array of objects with instruction), safety_precautions (array), escalation_guidance, status set to 'draft'. Return only valid JSON, no other text. If the document does not contain clear fault or troubleshooting information, return an empty array []. Never return explanatory text, only a JSON array.`,
         messages: [{
           role: 'user',
           content: `Machine type: ${machineType}\n\nManual text:\n${truncated}`,
@@ -73,22 +73,42 @@ export async function POST(req: NextRequest) {
     }
 
     const raw = response.content[0].type === 'text' ? response.content[0].text : '[]'
-    const clean = raw.replace(/```json\s*|```/g, '').trim()
 
-    let faults: any[]
+    let faults: any[] | undefined
+
     try {
-      faults = JSON.parse(clean)
+      faults = JSON.parse(raw)
     } catch {
-      return NextResponse.json(
-        { error: 'AI returned malformed JSON', raw: raw.slice(0, 500) },
-        { status: 500 }
-      )
+      // fall through
+    }
+
+    if (!Array.isArray(faults)) {
+      const start = raw.indexOf('[')
+      const end = raw.lastIndexOf(']')
+      if (start !== -1 && end !== -1 && end > start) {
+        try {
+          faults = JSON.parse(raw.slice(start, end + 1))
+        } catch {
+          // fall through
+        }
+      }
+    }
+
+    if (!Array.isArray(faults)) {
+      const codeBlockMatch = raw.match(/```json\s*([\s\S]*?)```/) ?? raw.match(/```\s*([\s\S]*?)```/)
+      if (codeBlockMatch) {
+        try {
+          faults = JSON.parse(codeBlockMatch[1].trim())
+        } catch {
+          // fall through
+        }
+      }
     }
 
     if (!Array.isArray(faults)) {
       return NextResponse.json(
-        { error: 'AI response was not a JSON array', raw: raw.slice(0, 500) },
-        { status: 500 }
+        { error: 'Could not extract structured fault data from this document. The document may not contain standard fault/troubleshooting sections.' },
+        { status: 422 }
       )
     }
 
